@@ -1,0 +1,231 @@
+<html>
+    <head>
+        <title>chialisp-21 - a more modern chialisp compiler</title>
+        <link rel='stylesheet' href='css/main.css'></link>
+    </head>
+    <body>
+        <div class='app'>
+            <div class='heading'>
+                <div class='logo'>(🍃)</div>
+                <div class='heading-name'>chialisp 21 - a more modern chialisp compiler</div>
+                <div class='heading-spacer'></div>
+                <a class='heading-right' href='https://github.com/prozacchiwawa/clvm_tools_rs'>code</a>
+            </div>
+            <div class='body'>
+                <div class='nav'>
+                    <div><a href='#why'>Why a new compiler</a></div>
+                    <div><a href='#quickstart'>Quickstart</a></div>
+                    <div><a href='#features'>Features</a></div>
+                    <div><a href='#syntax'>Syntax</a></div>
+                </div>
+                <div class='content'>
+                    <h2><a id='why'></a>Why</h2>
+                    <p>
+                        The <a href='https://chialisp.com/'>chialisp</a> language is used to create spend conditions on the chia
+                        blockchain.  It was developed with a strong connection to the platform it executes on, clvm.  Clvm is a
+                        very good computation layer for its purpose; using infinite precision arithmetic means that a program
+                        can have no overflow conditions that it doesn't explicitly opt into, and its structure as an environment
+                        and an expression of only numbers and pairs makes formal analysis of computations in it relatively easy
+                        to undertake.  As such, a more human friendly programming language exists to be compiled to clvm, supporting
+                        names and numbers in a more familiar style.
+                    </p>
+                    <p class='bump'>
+                        The chialisp compiler written by <a href='https://github.com/richardkiss'>Richard Kiss</a> has filled this
+                        role, but has some drawbacks.  It is written in a style that highly couples it to the underlying
+                        representation of clvm which limits one's ability to provide user facing enhancements to the chialisp
+                        language itself, and it uses its optimizer to actually run compilation, so optimization and compilation
+                        aren't separable.  Given that, it's difficult to add new features and be certain code generation won't
+                        be disturbed in unexpected ways.  Adding to that the need to keep the base programs in chia compiling
+                        in exactly the same way and that's why I wrote a new compiler for chialisp that to the extent possible is
+                        focused on diagnostics, maintainability and extensibility for future chialisp programs written by users
+                        of the chia blockchain.
+                    </p>
+                    <p class='bump'>
+                        Since it's very new, I'm asking chialisp users and those curious to try it to give feedback.
+                    </p>
+                    <h2><a id='quickstart'>Quickstart</h2>
+                        <p>
+                            <h3>Installing</h3>
+                            <div class='box'>
+                                <div class='box-content'>
+                                    <pre>(venv) $ git clone <a href='https://github.com/prozacchiwawa/clvm_tools_rs'>https://github.com/prozacchiwawa/clvm_tools_rs</a></pre>
+                                    <pre>(venv) $ cd clvm_tools_rs</pre>
+                                    <pre>(venv) $ cargo build</pre>
+                                    <h3>optional - enable use in python code based on chia-blockchain</h3>
+                                    <pre>(venv) $ maturin develop --release</pre>
+                                    <pre>(venv) $ export CLVM_TOOLS_RS=true</pre>
+                                </div>
+                                <h4>shell commands - installing</h4>
+                            </div>
+                        </p>
+                        <p>
+                            <h3>An example program (from <a href='https://chialisp.com/docs/tutorials/custom_puzzle_lock/'>Custom Puzzle Lock</a>)</h3>
+                            <div class='box'>
+                                <div class='box-content'>
+                                    <pre>(mod (password new_puzhash amount)</pre>
+                                    <pre></pre>
+                                    <pre>     (include *standard-cl-21*) ;; Specify chialisp-21 compilation.</pre>
+                                    <pre></pre>
+                                    <pre>     (defconstant CREATE_COIN 51)</pre>
+                                    <pre></pre>
+                                    <pre>     (if (= (sha256 password)</pre>
+                                    <pre>          (q . 0x2cf24dba5fb0a30e26e83b2ac5b9e29e1b161e5c1fa7425e73043362938b9824))</pre>
+                                    <pre>       (list (list CREATE_COIN new_puzhash amount))</pre>
+                                    <pre>       (x)</pre>
+                                    <pre>       )</pre>
+                                    <pre>     )</pre>
+                                </div>
+                                <h4>test.cl</h4>
+                            </div>
+                        </p>
+                        <p>
+                            <h3>Build and run it</h3>
+                            <div class='box'>
+                                <div class='box-content'>
+                                    <pre>(venv) $ ./target/debug/run test.cl > test.clvm</pre>
+                                    <pre>(venv) $ brun test.clvm '(hello 0x5f5767744f91c1c326d927a63d9b34fa7035c10e3eb838c44e3afe127c1b7675 2)'</pre>
+                                    <pre>((i 0x5f5767744f91c1c326d927a63d9b34fa7035c10e3eb838c44e3afe127c1b7675 2))</pre>
+                                </div>
+                                <h4>shell commands - compiling and running</h4>
+                            </div>
+                        </p>
+                        <h2><a id='features'></a>Features</h2>
+                        <p>
+                            <h3>Better diagnostic information</h3>
+                            <div class='box'>
+                                <div class='box-content'>
+                                    <pre>(venv) $ ./target/debug/run test.cl</pre>
+                                    <pre>test.cl(4):14-test.cl(4):20: no such callable 'sha257'</pre>
+                                </div>
+                                <h4>error reporting<h4>
+                            </div>
+                            <h3>Scoping to reduce cognitive load</h3>
+                            <div class='inset'>
+                                You don't need to spend time tracking down collisions between names you define and the clvm primitives.  Arguments to defined functions and macros operate distinctly from arguments to the program as a whole.
+                            </div>
+                            <div class='box'>
+                                <div class='box-content'>
+                                    <pre>(mod (a)</pre>
+                                    <pre>     (include *standard-cl-21*)</pre>
+                                    <pre>     (defun f (a) (+ a 1))</pre>
+                                    <pre>     (f (* a 2))</pre>
+                                    <pre>     )</pre>
+                                </div>
+                                <h4>scope.cl</h4>
+                            </div>
+                            <h3>Let forms</h3>
+                            <div class='box'>
+                                <div class='box-content'>
+                                    <pre>(mod (password new_puzhash amount)</pre>
+                                    <pre></pre>
+                                    <pre>     (include *standard-cl-21*) ;; Specify chialisp-21 compilation.</pre>
+                                    <pre></pre>
+                                    <pre>     (defconstant CREATE_COIN 51)</pre>
+                                    <pre></pre>
+                                    <pre>     (defun check-password (password)</pre>
+                                    <pre>       (let ((password-hash (sha256 password))</pre>
+                                    <pre>             (real-hash 0x2cf24dba5fb0a30e26e83b2ac5b9e29e1b161e5c1fa7425e73043362938b9824))</pre>
+                                    <pre></pre>
+                                    <pre>         (= password-hash real-hash)</pre>
+                                    <pre>         )</pre>
+                                    <pre>       )</pre>
+                                    <pre></pre>
+                                    <pre>     (if (check-password password)</pre>
+                                    <pre>         (list (list CREATE_COIN new_puzhash amount))</pre>
+                                    <pre>       (x)</pre>
+                                    <pre>       )</pre>
+                                    <pre>     )</pre>
+                                </div>
+                                <h4>test.cl with let form</h4>
+                            </div>
+                        </p>
+                        <h2><a id='syntax'></a>Syntax</h2>
+                        <h3>Module</h3>
+                        <p>
+                            <div class='box-content'><pre>(mod args [helper-forms...] body)</pre></div>
+                        </p>
+                        <p class='bump'>
+                            A module defines its arguments and gives its definitions.  This is what can be thought of as a 'chialisp program'.
+                        </p>
+                        <h3>Helper forms</h3>
+                        <p>
+                            <div class='box-content'><pre>(include file)</pre></div>
+                        </p>
+                        <p class='bump'>
+                            Including external definitions ( file contains a single list form ([helper-forms...]) )
+                        </p>
+                        <p>
+                            <div class='box-content'><pre>(defconstant name value)</pre></div>
+                        </p>
+                        <p class='bump'>
+                            A constant defined in a module
+                        </p>
+                        <p>
+                            <div class='box-content'><pre>(defmacro name args [helper-forms...] body)</pre></div>
+                        </p>
+                        <p class='bump'>
+                            A macro is given the argument forms provided pre-compilation and executed within the compiler.
+                        </p>
+                        <p>
+                            <div class='box-content'><pre>(defun[-inline] name args body)</pre></div>
+                        </p>
+                        <p class='bump'>
+                            A function which is stored in the environment until used.
+                            Can be called recursively if not inlined.
+                        </p>
+                        <h3>Body forms</h3>
+                        <p>
+                            <div class='box-content'><pre>(callable [expressions...])</pre></div>
+                        </p>
+                        <p class='bump'>
+                            Callables are defined by helperforms and predefined in the
+                            environment to match the canonical clvm operators.  Macros replace the call site with the macro result.
+                        </p>
+                        <p>
+                            <div class='box-content'><pre>(let ([bindings]) body)</pre></div>
+                        </p>
+                        <p class='bump'>
+                            With bindings given like <tt>(name expression)</tt>, the let binding
+                            introduces new local names in a scope.
+                        </p>
+                        <p>
+                            <div class='box-content'><pre>(com [source])</pre></div>
+                        </p>
+                        <p class='bump'>
+                            A special form used in macros that recursively invokes the compiler on the
+                            given code.  Because macros evaluate to runnable clvm, the user's code must be compiled by the macro to
+                            be used (for example) by the 'a' apply operator in clvm.
+                        </p>
+                        <p>
+                            <div class='box-content'><pre>@</pre></div>
+                        </p>
+                        <p class='bump'>
+                            References the full environment.
+                        </p>
+                        <p>
+                            <div class='box-content'><pre>(@ number)</pre></div>
+                        </p>
+                        <p class='bump'>
+                            A special form allowing a number to be used as an environment reference in clvm style.
+                        </p>
+                        <h3>Predefined macros</h3>
+                        <p>
+                            <div class='box-content'><pre>(list ...)</pre></div>
+                        </p>
+                        <p class='bump'>
+                            Constructs a list of the given argument values using clvm primitives to create the cons pairs.
+                        </p>
+                        <p>
+                            <div class='box-content'><pre>(if cond if-true if-false)</pre></div>
+                        </p>
+                        <p class='bump'>
+                            As the clvm primitive i is eager, produce a form that invokes either the code in if-true or the code in if-false based on the condition using the 'a' apply primitive in clvm.
+                        </p>
+                        <p class='bump'>
+                            Classic chialisp defines if as a macro, and that is preserved in this version of the compiler.
+                        </p>
+                </div>
+            </div>
+        </div>
+    </body>
+</html>
