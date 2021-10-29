@@ -2,12 +2,12 @@ use std::fs;
 use std::path::PathBuf;
 use std::rc::Rc;
 
-use clvm_rs::allocator::{
+use clvm_rust::allocator::{
     Allocator,
     NodePtr,
     SExp
 };
-use clvm_rs::reduction::EvalErr;
+use clvm_rust::reduction::EvalErr;
 
 use crate::classic::clvm::__type_compatibility__::{
     Stream,

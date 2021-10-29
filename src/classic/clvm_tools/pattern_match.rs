@@ -1,5 +1,5 @@
 use std::collections::HashMap;
-use clvm_rs::allocator::{
+use clvm_rust::allocator::{
     Allocator,
     NodePtr,
     SExp

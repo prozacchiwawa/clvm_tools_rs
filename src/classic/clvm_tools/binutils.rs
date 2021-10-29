@@ -4,12 +4,12 @@ use std::rc::Rc;
 use encoding8::ascii::is_printable;
 use unicode_segmentation::UnicodeSegmentation;
 
-use clvm_rs::allocator::{
+use clvm_rust::allocator::{
     Allocator,
     NodePtr,
     SExp
 };
-use clvm_rs::reduction::EvalErr;
+use clvm_rust::reduction::EvalErr;
 
 use crate::classic::clvm::__type_compatibility__::{
     Bytes,

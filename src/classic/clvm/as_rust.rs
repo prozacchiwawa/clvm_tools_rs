@@ -1,5 +1,5 @@
-use clvm_rs::allocator::Allocator;
-use clvm_rs::reduction::{
+use clvm_rust::allocator::Allocator;
+use clvm_rust::reduction::{
     Response
 };
 

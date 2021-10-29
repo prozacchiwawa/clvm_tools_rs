@@ -21,13 +21,13 @@ use std::fs;
 
 use core::cmp::max;
 
-use clvm_rs::allocator::{
+use clvm_rust::allocator::{
     Allocator,
     NodePtr,
     SExp
 };
-use clvm_rs::reduction::EvalErr;
-use clvm_rs::run_program::PreEval;
+use clvm_rust::reduction::EvalErr;
+use clvm_rust::run_program::PreEval;
 
 use num_bigint::ToBigInt;
 #[macro_use]

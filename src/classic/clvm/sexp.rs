@@ -3,13 +3,13 @@ use std::fmt::Debug;
 use std::rc::Rc;
 use std::string::String;
 
-use clvm_rs::allocator::{
+use clvm_rust::allocator::{
     Allocator,
     AtomBuf,
     NodePtr,
     SExp
 };
-use clvm_rs::reduction::EvalErr;
+use clvm_rust::reduction::EvalErr;
 
 use bls12_381::G1Affine;
 

@@ -5,14 +5,14 @@ use std::path::PathBuf;
 
 use num_bigint::ToBigInt;
 
-use clvm_rs::allocator::{
+use clvm_rust::allocator::{
     Allocator,
     NodePtr,
     SExp
 };
-use clvm_rs::cost::Cost;
-use clvm_rs::operator_handler::OperatorHandler;
-use clvm_rs::reduction::{
+use clvm_rust::cost::Cost;
+use clvm_rust::operator_handler::OperatorHandler;
+use clvm_rust::reduction::{
     EvalErr,
     Reduction,
     Response

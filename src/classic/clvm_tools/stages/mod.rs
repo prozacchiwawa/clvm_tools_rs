@@ -1,4 +1,4 @@
-use clvm_rs::allocator::{
+use clvm_rust::allocator::{
     Allocator,
     NodePtr
 };

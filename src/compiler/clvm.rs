@@ -2,12 +2,12 @@ use std::borrow::Borrow;
 use std::collections::HashMap;
 use std::rc::Rc;
 
-use clvm_rs::allocator::{
+use clvm_rust::allocator::{
     Allocator,
     NodePtr
 };
-use clvm_rs::allocator;
-use clvm_rs::reduction::EvalErr;
+use clvm_rust::allocator;
+use clvm_rust::reduction::EvalErr;
 
 use num_bigint::ToBigInt;
 

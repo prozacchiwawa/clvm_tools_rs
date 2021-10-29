@@ -3,11 +3,11 @@ use std::fs::File;
 use std::io::Write;
 use std::rc::Rc;
 
-use clvm_rs::allocator::{
+use clvm_rust::allocator::{
     Allocator,
     NodePtr
 };
-use clvm_rs::reduction::EvalErr;
+use clvm_rust::reduction::EvalErr;
 
 use crate::classic::clvm::__type_compatibility__::Stream;
 use crate::classic::clvm::serialize::sexp_to_stream;

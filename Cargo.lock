@@ -107,9 +107,9 @@ dependencies = [
 ]
 
 [[package]]
-name = "clvm_rs"
+name = "clvm_rust"
 version = "0.1.14"
-source = "git+https://github.com/richardkiss/clvm_rs?branch=chia_rs#a7418fea7e314311e5b9136dcabeaed44174612d"
+source = "git+https://github.com/prozacchiwawa/clvm_rs?branch=20211029-try-config#7901d0b9b0855c99d54dcbfebb4182c9aefa4f76"
 dependencies = [
  "bls12_381",
  "hex",
@@ -128,7 +128,7 @@ version = "0.1.0"
 dependencies = [
  "bls12_381",
  "bytestream",
- "clvm_rs",
+ "clvm_rust",
  "derivative",
  "do-notation",
  "encoding8",
@@ -139,6 +139,7 @@ dependencies = [
  "num-bigint 0.4.0",
  "num-traits",
  "pyo3",
+ "pyo3-build-config",
  "serde_json",
  "sha2",
  "unicode-segmentation",
@@ -618,9 +619,9 @@ dependencies = [
 
 [[package]]
 name = "pyo3-build-config"
-version = "0.14.2"
+version = "0.14.5"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "755944027ce803c7238e59c5a18e59c1d0a4553db50b23e9ba209a568353028d"
+checksum = "d12961738cacbd7f91b7c43bc25cfeeaa2698ad07a04b3be0aa88b950865738f"
 dependencies = [
  "once_cell",
 ]

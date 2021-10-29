@@ -16,12 +16,12 @@ leading bits is the count of bytes to read of size
 use std::rc::Rc;
 use std::vec::Vec;
 
-use clvm_rs::allocator::{
+use clvm_rust::allocator::{
     Allocator,
     NodePtr,
     SExp
 };
-use clvm_rs::reduction::{
+use clvm_rust::reduction::{
     EvalErr,
     Reduction,
     Response

@@ -5,7 +5,7 @@ use std::collections::HashSet;
 
 use num_bigint::ToBigInt;
 
-use clvm_rs::allocator::Allocator;
+use clvm_rust::allocator::Allocator;
 use crate::classic::clvm_tools::stages::stage_0::TRunProgram;
 
 use crate::classic::clvm::__type_compatibility__::{

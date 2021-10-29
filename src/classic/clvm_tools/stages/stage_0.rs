@@ -1,21 +1,21 @@
 use std::collections::HashMap;
 use std::rc::Rc;
 
-use clvm_rs::allocator::{Allocator, NodePtr, SExp};
-use clvm_rs::cost::Cost;
-use clvm_rs::f_table::{
+use clvm_rust::allocator::{Allocator, NodePtr, SExp};
+use clvm_rust::cost::Cost;
+use clvm_rust::f_table::{
     f_lookup_for_hashmap,
     FLookup
 };
-use clvm_rs::more_ops::op_unknown;
-use clvm_rs::operator_handler::OperatorHandler;
-use clvm_rs::reduction::{
+use clvm_rust::more_ops::op_unknown;
+use clvm_rust::operator_handler::OperatorHandler;
+use clvm_rust::reduction::{
     EvalErr,
     Reduction,
     Response
 };
 
-use clvm_rs::run_program::{
+use clvm_rust::run_program::{
     PreEval,
     run_program
 };

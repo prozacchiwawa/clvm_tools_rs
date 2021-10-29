@@ -22,25 +22,28 @@ serde_json = "1.0"
 sha2 = "0.9.5"
 yamlette = "0.0.8"
 
-[target.'cfg(not(target_os = "macos"))'.dependencies.clvm_rs]
-git = "https://github.com/richardkiss/clvm_rs"
-branch = "chia_rs"
+[dependencies.clvm_rust]
+git = "https://github.com/prozacchiwawa/clvm_rs"
+branch = "20211029-try-config"
 
-[target.'cfg(target_os = "macos")'.dependencies.clvm_rs]
-git = "https://github.com/richardkiss/clvm_rs"
-branch = "chia_rs"
-default-features = false
+[build-dependencies]
+pyo3-build-config = "0.14.5"
 
 [lib]
 name = "clvm_tools_rs"
 crate-type = ["cdylib", "rlib"]
 
+[features]
+extension-module = ["pyo3/extension-module"]
+default = ["extension-module"]
+
 [target.'cfg(target_family="wasm")'.dependencies]
 wasm-bindgen = "0.2.75"
 wasm-bindgen-test = "0.3.25"
 
-[target.'cfg(not(target_family="wasm"))'.dependencies]
-pyo3 = "0.14.2"
+[target.'cfg(not(target_family="wasm"))'.dependencies.pyo3]
+version = "0.14.2"
+features = ["abi3-py37"]
 
 [[bin]]
 name = "opd"
