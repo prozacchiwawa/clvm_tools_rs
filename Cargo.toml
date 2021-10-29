@@ -22,8 +22,13 @@ serde_json = "1.0"
 sha2 = "0.9.5"
 yamlette = "0.0.8"
 
-[dependencies.clvm_rs]
-version = "0.1.12"
+[target.'cfg(not(target_os = "macos"))'.dependencies.clvm_rs]
+git = "https://github.com/richardkiss/clvm_rs"
+branch = "chia_rs"
+
+[target.'cfg(target_os = "macos")'.dependencies.clvm_rs]
+git = "https://github.com/richardkiss/clvm_rs"
+branch = "chia_rs"
 default-features = false
 
 [lib]
