@@ -1,9 +1,10 @@
 use clvm_tools_rs::compiler::sexp::SExp;
+use clvm_tools_rs::compiler::fuzzer::FuzzProgram;
 use rand::random;
 use std::env;
 
 fn main() {
-    // let args: Vec<String> = env::args().collect();
-    let sexp: SExp = random();
-    println!("{}", sexp.to_string());
+    // Sickos: hahaha YES
+    let prog: FuzzProgram = random();
+    println!("{}", prog.to_sexp().to_string());
 }
