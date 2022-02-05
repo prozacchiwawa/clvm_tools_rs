@@ -1,3 +1,6 @@
+use rand::distributions::Standard;
+use rand::prelude::Distribution;
+use rand::Rng;
 use std::borrow::Borrow;
 use std::hash::{Hash, Hasher};
 use std::rc::Rc;
@@ -19,6 +22,31 @@ pub enum SExp {
     Integer(Srcloc, Number),
     QuotedString(Srcloc, u8, Vec<u8>),
     Atom(Srcloc, Vec<u8>),
+}
+
+// Thanks: https://stackoverflow.com/questions/48490049/how-do-i-choose-a-random-value-from-an-enum
+impl Distribution<SExp> for Standard {
+    fn sample<R: Rng + ?Sized>(&self, rng: &mut R) -> SExp {
+        match rng.gen_range(0..=1) {
+            0 => {
+                let mut bytevec: Vec<u8> = Vec::new();
+                loop {
+                    let n: u8 = rng.gen_range(0..=40);
+                    if n < 26 {
+                        bytevec.push(n + 97); // lowercase a
+                    } else {
+                        break;
+                    }
+                }
+                SExp::Atom(Srcloc::start(&"*rng*".to_string()), bytevec)
+            },
+            _ => {
+                let a: SExp = rand::random();
+                let b: SExp = rand::random();
+                SExp::Cons(Srcloc::start(&"*rng*".to_string()), Rc::new(a), Rc::new(b))
+            }
+        }
+    }
 }
 
 impl Eq for SExp {}
