@@ -1,6 +1,7 @@
 use rand::distributions::Standard;
 use rand::prelude::Distribution;
 use rand::Rng;
+use rand::random;
 use std::borrow::Borrow;
 use std::hash::{Hash, Hasher};
 use std::rc::Rc;
@@ -24,28 +25,23 @@ pub enum SExp {
     Atom(Srcloc, Vec<u8>),
 }
 
+const MAX_DEPTH : u8 = 2;
+
+fn random_sexp<R: Rng + ?Sized>(rng: &mut R, depth: u8) -> SExp {
+    let selection = rng.gen_range(0..=1);
+    if selection == 0 || depth >= MAX_DEPTH {
+        SExp::random_atom()
+    } else {
+        let a: SExp = random_sexp(rng, depth + 1);
+        let b: SExp = random_sexp(rng, depth + 1);
+        SExp::Cons(Srcloc::start(&"*rng*".to_string()), Rc::new(a), Rc::new(b))
+    }
+}
+
 // Thanks: https://stackoverflow.com/questions/48490049/how-do-i-choose-a-random-value-from-an-enum
 impl Distribution<SExp> for Standard {
     fn sample<R: Rng + ?Sized>(&self, rng: &mut R) -> SExp {
-        match rng.gen_range(0..=1) {
-            0 => {
-                let mut bytevec: Vec<u8> = Vec::new();
-                loop {
-                    let n: u8 = rng.gen_range(0..=40);
-                    if n < 26 {
-                        bytevec.push(n + 97); // lowercase a
-                    } else {
-                        break;
-                    }
-                }
-                SExp::Atom(Srcloc::start(&"*rng*".to_string()), bytevec)
-            },
-            _ => {
-                let a: SExp = rand::random();
-                let b: SExp = rand::random();
-                SExp::Cons(Srcloc::start(&"*rng*".to_string()), Rc::new(a), Rc::new(b))
-            }
-        }
+        random_sexp(rng, 0)
     }
 }
 
@@ -410,6 +406,22 @@ impl SExp {
                 format!("wanted atom got cons cell {}", self.to_string()),
             )),
         }
+    }
+
+    pub fn random_atom() -> SExp {
+        let mut bytevec: Vec<u8> = Vec::new();
+        let mut len = 0;
+        loop {
+            let mut n: u8 = random();
+            n %= 40;
+            len += 1;
+            if n < 26 && len < 6 {
+                bytevec.push(n + 97); // lowercase a
+            } else {
+                break;
+            }
+        }
+        SExp::Atom(Srcloc::start(&"*rng*".to_string()), bytevec)
     }
 }
 

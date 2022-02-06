@@ -90,7 +90,7 @@ fn select_argument(num_: u8, fun: &FuzzProgram, bindings: &Vec<Vec<FuzzOperation
 }
 
 fn select_call(num: u8, prog: &FuzzProgram) -> String {
-    format!("function_{}", (num % prog.functions.len() as u8))
+    format!("fun_{}", (num % prog.functions.len() as u8))
 }
 
 fn make_operator(op: String, args: Vec<SExp>) -> SExp {
@@ -178,7 +178,7 @@ fn distribute_args(a: ArgListType, fun: &FuzzProgram, bindings: &Vec<Vec<FuzzOpe
 }
 
 impl FuzzOperation {
-    fn to_sexp(&self, fun: &FuzzProgram, bindings: &Vec<Vec<FuzzOperation>>) -> SExp {
+    pub fn to_sexp(&self, fun: &FuzzProgram, bindings: &Vec<Vec<FuzzOperation>>) -> SExp {
         let loc = Srcloc::start(&"*rng*".to_string());
         match self {
             FuzzOperation::Argref(n) => {
@@ -188,7 +188,13 @@ impl FuzzOperation {
                 );
                 SExp::atom_from_string(loc.clone(), &argument.0)
             },
-            FuzzOperation::Quote(s) => make_operator("q".to_string(), vec!(s.clone())),
+            FuzzOperation::Quote(s) => {
+                SExp::Cons(
+                    loc.clone(),
+                    Rc::new(SExp::atom_from_string(loc.clone(), &"q".to_string())),
+                    Rc::new(s.clone())
+                )
+            },
             FuzzOperation::If(cond,ct,cf) => make_operator(
                 "if".to_string(),
                 vec!(
@@ -287,35 +293,64 @@ fn random_vector_of<T>(at_least_one: bool) -> Vec<T> where Standard: Distributio
     return args;
 }
 
+const MAX_DEPTH : u8 = 2;
+
+fn make_random_call<R: Rng + ?Sized>(rng: &mut R, depth: u8) -> FuzzOperation {
+    let mut args: Vec<FuzzOperation> = Vec::new();
+    for i in 0..255 {
+        args.push(random_operation(rng, depth + 1, false))
+    }
+    FuzzOperation::Call(random(), args)
+}
+
+// FuzzOperation is potentially infinite so we'll limit the depth to something
+// sensible.
+fn random_operation<R: Rng + ?Sized>(rng: &mut R, depth: u8, must_call: bool) -> FuzzOperation {
+    if (depth >= MAX_DEPTH) {
+        return FuzzOperation::Argref(random_u8());
+    }
+
+    if (must_call) {
+        return make_random_call(rng, depth);
+    }
+
+    let mut selection = random_u8();
+
+    if (selection < 5) {
+        FuzzOperation::If(
+            Rc::new(random_operation(rng, depth + 1, false)),
+            Rc::new(random_operation(rng, depth + 1, false)),
+            Rc::new(random_operation(rng, depth + 1, false))
+        )
+    } else if (selection < 10) {
+        FuzzOperation::Multiply(
+            Rc::new(random_operation(rng, depth + 1, false)),
+            Rc::new(random_operation(rng, depth + 1, false))
+        )
+    } else if (selection < 20) {
+        FuzzOperation::Sub(
+            Rc::new(random_operation(rng, depth + 1, false)),
+            Rc::new(random_operation(rng, depth + 1, false))
+        )
+    } else if (selection < 30) {
+        FuzzOperation::Sha256(random_vector_of::<FuzzOperation>(false))
+    } else if (selection < 35) {
+        FuzzOperation::Let(
+            random_vector_of::<FuzzOperation>(true),
+            Rc::new(random_operation(rng, depth + 1, false))
+        )
+    } else if (selection < 50) {
+        make_random_call(rng, depth + 1)
+    } else if (selection < 60) {
+        FuzzOperation::Quote(SExp::random_atom())
+    } else {
+        FuzzOperation::Argref(random_u8())
+    }
+}
+
 impl Distribution<FuzzOperation> for Standard {
     fn sample<R: Rng + ?Sized>(&self, rng: &mut R) -> FuzzOperation {
-        match rng.gen_range(0..=7) {
-            0 => FuzzOperation::Argref(random()),
-            1 => FuzzOperation::Quote(random()),
-            2 => {
-                FuzzOperation::If(
-                    Rc::new(random()),
-                    Rc::new(random()),
-                    Rc::new(random())
-                )
-            },
-            3 => FuzzOperation::Multiply(Rc::new(random()), Rc::new(random())),
-            4 => FuzzOperation::Sub(Rc::new(random()), Rc::new(random())),
-            5 => FuzzOperation::Sha256(random_vector_of::<FuzzOperation>(true)),
-            6 => {
-                FuzzOperation::Let(
-                    random_vector_of::<FuzzOperation>(true),
-                    Rc::new(random())
-                )
-            },
-            _ => {
-                let mut args: Vec<FuzzOperation> = Vec::new();
-                for i in 0..255 {
-                    args.push(random())
-                }
-                FuzzOperation::Call(random(), args)
-            }
-        }
+        random_operation(rng, 0, false)
     }
 }
 
@@ -457,7 +492,7 @@ impl Distribution<FuzzProgram> for Standard {
         FuzzProgram {
             args: random(),
             functions: funs,
-            body: random()
+            body: random_operation(rng, 0, true)
         }
     }
 }
