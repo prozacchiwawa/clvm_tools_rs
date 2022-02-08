@@ -15,7 +15,7 @@ use crate::compiler::compiler::run_optimizer;
 use crate::compiler::comptypes::{
     cons_of_string_map, foldM, join_vecs_to_string, list_to_cons, mapM, with_heading, Binding,
     BodyForm, Callable, CompileErr, CompileForm, CompiledCode, CompilerOpts, DefunCall, HelperForm,
-    InlineFunction, PrimaryCodegen, LetFormKind
+    InlineFunction, LetFormKind, PrimaryCodegen,
 };
 use crate::compiler::debug::{build_swap_table_mut, relabel};
 use crate::compiler::frontend::compile_bodyform;
@@ -332,7 +332,7 @@ pub fn get_callable(
     }
 }
 
-fn process_macro_call(
+pub fn process_macro_call(
     allocator: &mut Allocator,
     runner: Rc<dyn TRunProgram>,
     opts: Rc<dyn CompilerOpts>,
@@ -345,6 +345,8 @@ fn process_macro_call(
     let mut swap_table = HashMap::new();
     let args_to_macro = list_to_cons(l.clone(), &converted_args);
     build_swap_table_mut(&mut swap_table, &args_to_macro);
+
+    let arg_strs: Vec<String> = args.iter().map(|x| x.to_sexp().to_string()).collect();
 
     run(
         allocator,
@@ -483,25 +485,15 @@ fn compile_call(
                 Rc::new(code),
             ),
 
-            Callable::CallInline(l, inline) => {
-                replace_in_inline(
-                    allocator,
-                    runner.clone(),
-                    opts.clone(),
-                    compiler,
-                    l.clone(),
-                    &inline,
-                    &tl,
-                ).and_then(|x| {
-                    generate_expr_code(
-                        allocator,
-                        runner.clone(),
-                        opts.clone(),
-                        compiler,
-                        x.clone(),
-                    )
-                })
-            },
+            Callable::CallInline(l, inline) => replace_in_inline(
+                allocator,
+                runner.clone(),
+                opts.clone(),
+                compiler,
+                l.clone(),
+                &inline,
+                &tl,
+            ),
 
             Callable::CallDefun(l, lookup) => {
                 generate_args_code(allocator, runner, opts.clone(), compiler, l.clone(), &tl)
@@ -926,7 +918,8 @@ fn process_helper_let_bindings(
         match result[i].clone() {
             HelperForm::Defun(l, name, inline, args, body) => {
                 let context = if (inline) { Some(args.clone()) } else { None };
-                let helper_result = hoist_body_let_binding(compiler, context, args.clone(), body.clone());
+                let helper_result =
+                    hoist_body_let_binding(compiler, context, args.clone(), body.clone());
                 let hoisted_helpers = helper_result.0;
                 let hoisted_body = helper_result.1.clone();
 
@@ -1031,17 +1024,9 @@ fn finalize_env_(
                             c,
                             l.clone(),
                             res,
-                            &synthesize_args(res.args.clone())
+                            &synthesize_args(res.args.clone()),
                         )
-                        .and_then(|x| {
-                            generate_expr_code(
-                                allocator,
-                                runner,
-                                opts,
-                                c,
-                                x.clone()
-                            )
-                        }).map(|x| x.1.clone()),
+                        .map(|x| x.1.clone()),
                         None => {
                             /* Parentfns are functions in progress in the parent */
                             if !c.parentfns.get(v).is_none() {
@@ -1081,7 +1066,7 @@ fn finalize_env_(
             .map(|r| Rc::new(SExp::Cons(l.clone(), h.clone(), r.clone())))
         }),
 
-        _ => Ok(env.clone())
+        _ => Ok(env.clone()),
     }
 }
 
@@ -1100,7 +1085,7 @@ fn finalize_env(
             l.clone(),
             h.clone(),
         ),
-        _ => Ok(c.env.clone())
+        _ => Ok(c.env.clone()),
     }
 }
 
