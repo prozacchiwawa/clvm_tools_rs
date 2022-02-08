@@ -176,6 +176,164 @@ fn run_test_8() {
 }
 
 #[test]
+fn run_inlines() {
+    let result = run_string(
+        &"(mod (a) (defun-inline F (x) (+ x 1)) (defun-inline G (x) (* x 2)) (G (F a)))"
+            .to_string(),
+        &"(13)".to_string(),
+    )
+        .unwrap();
+    assert_eq!(result.to_string(), "28".to_string());
+}
+
+#[test]
+fn run_inlines_2() {
+    let result = run_string(
+        &"(mod (a b) (defun-inline F (x y) (+ x y)) (defun-inline G (x y) (- y x)) (defun-inline H (x y) (* x y)) (H (F a b) (G a b)))"
+            .to_string(),
+        &"(103 107)".to_string(),
+    )
+        .unwrap();
+    // H (103 + 107) (108 - 104)
+    // 210 * 4
+    // 840
+    assert_eq!(result.to_string(), "840".to_string());
+}
+
+#[test]
+fn run_test_at_form() {
+    let result = run_string(
+        &"(mod (a b) (- (@ 11) (@ 5)))".to_string(),
+        &"(51 107)".to_string(),
+    ).unwrap();
+    assert_eq!(result.to_string(), "56".to_string());
+}
+
+#[test]
+fn run_test_intermediate_let_1() {
+    let result = run_string(
+        &indoc! {"
+            (mod (a)
+                (defun-inline letbinding_$_264 args args)
+                (letbinding_$_264 (r @) (+ a 1))
+                )
+        "}.to_string(),
+        &"(100)".to_string(),
+    ).unwrap();
+    assert_eq!(result.to_string(), "((100) 101)".to_string());
+}
+
+#[test]
+fn run_test_intermediate_let_1_1() {
+    let result = run_string(
+        &indoc! {"
+            (mod (a)
+                (defun-inline letbinding_$_265 args args)
+                (defun letbinding_$_264 ((a) x) (letbinding_$_265 (c (c a ()) (c x ())) (+ x 1)))
+                (letbinding_$_264 (r @) (+ a 1))
+                )
+        "}.to_string(),
+        &"(100)".to_string(),
+    ).unwrap();
+    assert_eq!(result.to_string(), "(((100) 101) 102)".to_string());
+}
+
+#[test]
+fn run_test_intermediate_let_1_2() {
+    let result = run_string(
+        &indoc! {"
+            (mod (a)
+                (defun letbinding_$_265 args args)
+                (defun letbinding_$_264 ((a) x) (letbinding_$_265 (c (c a ()) (c x ())) (+ x 1)))
+                (letbinding_$_264 (r @) (+ a 1))
+                )
+        "}.to_string(),
+        &"(100)".to_string(),
+    ).unwrap();
+    assert_eq!(result.to_string(), "(((100) 101) 102)".to_string());
+}
+
+#[test]
+fn run_test_intermediate_let_1_3() {
+    let result = run_string(
+        &indoc! {"
+            (mod (a)
+                (defun-inline letbinding_$_265 args args)
+                (defun letbinding_$_264 ((a) x) (letbinding_$_265 (c (c a ()) (c x ())) (+ x 1)))
+                (letbinding_$_264 (r @) (+ a 1))
+                )
+        "}.to_string(),
+        &"(100)".to_string(),
+    ).unwrap();
+    assert_eq!(result.to_string(), "(((100) 101) 102)".to_string());
+}
+
+#[test]
+fn run_test_intermediate_let_1_4() {
+    let result = run_string(
+        &indoc! {"
+            (mod (a)
+                (defun letbinding_$_265 args args)
+                (defun-inline letbinding_$_264 ((a) x) (letbinding_$_265 (c (c a ()) (c x ())) (+ x 1)))
+                (letbinding_$_264 (r @) (+ a 1))
+                )
+        "}.to_string(),
+        &"(100)".to_string(),
+    ).unwrap();
+    assert_eq!(result.to_string(), "(((100) 101) 102)".to_string());
+}
+
+#[test]
+fn run_test_intermediate_let_2() {
+    let result = run_string(
+        &indoc! {"
+            (mod (a)
+                (defun-inline letbinding_$_265 args args)
+                (defun-inline letbinding_$_264 ((a) x) (letbinding_$_265 (c (c a ()) (c x ())) (+ x 1)))
+                (letbinding_$_264 (r @) (+ a 1))
+                )
+        "}.to_string(),
+        &"(100)".to_string(),
+    ).unwrap();
+    assert_eq!(result.to_string(), "(((100) 101) 102)".to_string());
+}
+
+#[test]
+fn run_test_intermediate_let_final() {
+    let result = run_string(
+        &indoc! {"
+            (mod (a)
+                (defun-inline letbinding_$_265 (((a) x_$_263) y) (+ x_$_263 y))
+                (defun-inline letbinding_$_264 ((a) x) (letbinding_$_265 (c (c a ()) (c x ())) (+ x 1)))
+                (letbinding_$_264 (r @) (+ a 1))
+                )
+        "}.to_string(),
+        &"(100)".to_string(),
+    ).unwrap();
+    assert_eq!(result.to_string(), "203".to_string());
+}
+
+#[test]
+fn run_test_let_star_2_deep() {
+    let result = run_string(
+        &"(mod (a) (let* ((x (+ a 1)) (y (+ x 1))) (+ x y)))".to_string(),
+        &"(100)".to_string(),
+    )
+        .unwrap();
+    assert_eq!(result.to_string(), "203".to_string());
+}
+
+#[test]
+fn run_test_let_star_3_deep() {
+    let result = run_string(
+        &"(mod (a) (let* ((x (+ a 1)) (y (+ x 1)) (z (* a y))) (+ x y z)))".to_string(),
+        &"(100)".to_string(),
+    )
+        .unwrap();
+    assert_eq!(result.to_string(), "10403".to_string());
+}
+
+#[test]
 fn run_test_9() {
     let result = run_string(
         &"(mod (a) (defun f (i) (let ((x (not i)) (y (* i 2))) (+ x y))) (f a))".to_string(),
