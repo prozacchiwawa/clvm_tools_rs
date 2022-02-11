@@ -89,8 +89,10 @@ fn select_argument(num_: u8, fun: &FuzzProgram, bindings: &Vec<Vec<FuzzOperation
     }
 }
 
-fn select_call(num: u8, prog: &FuzzProgram) -> String {
-    format!("fun_{}", (num % prog.functions.len() as u8))
+fn select_call(num: u8, prog: &FuzzProgram) -> (String, FuzzFunction) {
+    let selected_num = num % prog.functions.len() as u8;
+    let selected = &prog.functions[selected_num as usize];
+    (format!("fun_{}", selected_num), selected.clone())
 }
 
 fn make_operator(op: String, args: Vec<SExp>) -> SExp {
@@ -258,7 +260,7 @@ impl FuzzOperation {
                 let called_fun = select_call(random_u8(), fun);
                 let args =
                     distribute_args(
-                        fun.args.clone(),
+                        called_fun.1.args.clone(),
                         fun,
                         bindings,
                         args,
@@ -266,7 +268,7 @@ impl FuzzOperation {
                     );
                 SExp::Cons(
                     loc.clone(),
-                    Rc::new(SExp::atom_from_string(loc.clone(), &called_fun)),
+                    Rc::new(SExp::atom_from_string(loc.clone(), &called_fun.0)),
                     Rc::new(args.1)
                 )
             }
