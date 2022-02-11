@@ -6,5 +6,7 @@ use std::env;
 fn main() {
     // Sickos: hahaha YES
     let prog: FuzzProgram = random();
+    let args: SExp = prog.random_args();
     println!("{}", prog.to_sexp().to_string());
+    println!("{}", args.to_string());
 }

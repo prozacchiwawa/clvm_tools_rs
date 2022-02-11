@@ -1,3 +1,5 @@
+use num_bigint::ToBigInt;
+
 use rand::distributions::Standard;
 use rand::prelude::Distribution;
 use rand::Rng;
@@ -508,5 +510,21 @@ impl FuzzProgram {
         }
         body_vec.push(self.body.to_sexp(self, &Vec::new()));
         make_operator("mod".to_string(), body_vec)
+    }
+
+    pub fn random_args(&self) -> SExp {
+        let srcloc = Srcloc::start(&"*args*".to_string());
+        let mut args: Vec<FuzzOperation> = Vec::new();
+        for i in 0..255 {
+            let random_64: u64 = random();
+            args.push(FuzzOperation::Quote(SExp::Integer(srcloc.clone(), random_64.to_bigint().unwrap())));
+        }
+        distribute_args(
+            self.args.clone(),
+            self,
+            &Vec::new(),
+            &args,
+            0
+        ).1
     }
 }
