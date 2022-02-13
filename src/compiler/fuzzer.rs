@@ -181,6 +181,36 @@ fn distribute_args(a: ArgListType, fun: &FuzzProgram, bindings: &Vec<Vec<FuzzOpe
     }
 }
 
+fn random_args(loc: Srcloc, a: ArgListType) -> SExp {
+    match a {
+        ArgListType::ProperList(0) => SExp::Nil(loc.clone()),
+        ArgListType::ProperList(n) => {
+            let random_64: u64 = random();
+            let rest_result =
+                random_args(loc.clone(), ArgListType::ProperList(n-1));
+            SExp::Cons(
+                loc.clone(),
+                Rc::new(SExp::Integer(loc.clone(), random_64.to_bigint().unwrap())),
+                Rc::new(rest_result)
+            )
+        },
+        ArgListType::Structure(SExp::Nil(l)) => SExp::Nil(l.clone()),
+        ArgListType::Structure(SExp::Cons(l,a,b)) => {
+            let borrowed_a: &SExp = a.borrow();
+            let borrowed_b: &SExp = b.borrow();
+            SExp::Cons(
+                loc.clone(),
+                Rc::new(random_args(loc.clone(), ArgListType::Structure(borrowed_a.clone()))),
+                Rc::new(random_args(loc.clone(), ArgListType::Structure(borrowed_b.clone())))
+            )
+        },
+        ArgListType::Structure(_) => {
+            let random_64: u64 = random();
+            SExp::Integer(loc.clone(), random_64.to_bigint().unwrap())
+        }
+    }
+}
+
 impl FuzzOperation {
     pub fn to_sexp(&self, fun: &FuzzProgram, bindings: &Vec<Vec<FuzzOperation>>) -> SExp {
         let loc = Srcloc::start(&"*rng*".to_string());
@@ -514,17 +544,6 @@ impl FuzzProgram {
 
     pub fn random_args(&self) -> SExp {
         let srcloc = Srcloc::start(&"*args*".to_string());
-        let mut args: Vec<FuzzOperation> = Vec::new();
-        for i in 0..255 {
-            let random_64: u64 = random();
-            args.push(FuzzOperation::Quote(SExp::Integer(srcloc.clone(), random_64.to_bigint().unwrap())));
-        }
-        distribute_args(
-            self.args.clone(),
-            self,
-            &Vec::new(),
-            &args,
-            0
-        ).1
+        random_args(srcloc, self.args.clone())
     }
 }
