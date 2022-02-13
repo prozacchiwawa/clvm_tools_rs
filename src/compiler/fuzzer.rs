@@ -262,14 +262,22 @@ impl FuzzOperation {
                 for i_reverse in 0..our_bindings.len() {
                     let i = our_bindings.len() - i_reverse - 1;
                     let binding_name =
-                        format!("binding_{}", i_reverse);
+                        format!("binding_{}", i);
                     let b = &our_bindings[i];
 
                     bindings_done =
                         SExp::Cons(
                             loc.clone(),
-                            Rc::new(SExp::atom_from_string(loc.clone(), &binding_name)),
-                            Rc::new(b.to_sexp(fun, bindings))
+                            Rc::new(SExp::Cons(
+                                loc.clone(),
+                                Rc::new(SExp::atom_from_string(loc.clone(), &binding_name)),
+                                Rc::new(SExp::Cons(
+                                    loc.clone(),
+                                    Rc::new(b.to_sexp(fun, bindings)),
+                                    Rc::new(SExp::Nil(loc.clone()))
+                                ))
+                            )),
+                            Rc::new(bindings_done)
                         );
                 }
 
