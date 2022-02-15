@@ -1,4 +1,4 @@
-use num_bigint::ToBigInt;
+use num_bigint::{BigInt, ToBigInt};
 
 use rand::distributions::Standard;
 use rand::prelude::Distribution;
@@ -7,8 +7,20 @@ use rand::random;
 use std::borrow::Borrow;
 use std::rc::Rc;
 
+use crate::compiler::clvm::truthy;
 use crate::compiler::sexp::SExp;
 use crate::compiler::srcloc::Srcloc;
+use crate::compiler::runtypes::RunFailure;
+use crate::classic::clvm::__type_compatibility__::{
+    Bytes,
+    BytesFromType,
+    Stream,
+    sha256
+};
+use crate::classic::clvm::casts::{
+    TConvertOption,
+    bigint_to_bytes
+};
 
 // We don't actually need all operators here, just a good selection with
 // semantics that are distinguishable.
@@ -539,6 +551,118 @@ impl Distribution<FuzzProgram> for Standard {
     }
 }
 
+// Always returns Quote(...) for the matching value in args.
+fn pick_argument(n: u8, prog: &FuzzProgram, args: &SExp, bindings: &Vec<Vec<FuzzOperation>>) -> FuzzOperation {
+    FuzzOperation::Quote(SExp::Nil(args.loc()))
+}
+
+fn evaluate_to_numbers(prog: &FuzzProgram, args: &SExp, bindings: &Vec<Vec<FuzzOperation>>, a: &FuzzOperation, b: &FuzzOperation) -> Result<(BigInt, BigInt), RunFailure> {
+    let a_val = interpret_program(prog, args, bindings, a)?;
+    let b_val = interpret_program(prog, args, bindings, b)?;
+    match (&a_val, &b_val) {
+        (SExp::Integer(l, a), SExp::Integer(_, b)) => {
+            Ok((a.clone(), b.clone()))
+        },
+        (SExp::Cons(l,_,_), _) => {
+            Err(RunFailure::RunErr(l.clone(), format!("*: expected atom got {}", a_val.to_string())))
+        },
+        (_, SExp::Cons(l,_,_)) => {
+            Err(RunFailure::RunErr(l.clone(), format!("*: expected atom got {}", b_val.to_string())))
+        },
+        (a, b) => {
+            let num_a = a.get_number().map_err(|e| {
+                RunFailure::RunErr(a.loc(), e.1)
+            })?;
+            let num_b = b.get_number().map_err(|e| {
+                RunFailure::RunErr(b.loc(), e.1)
+            })?;
+            Ok((num_a, num_b))
+        }
+    }
+}
+
+fn byte_vec_of_sexp(val: &SExp) -> Result<Vec<u8>, RunFailure> {
+    match val {
+        SExp::Nil(_) => Ok(Vec::new()),
+        SExp::Atom(_,a) => Ok(a.clone()),
+        SExp::QuotedString(_,_,s) => Ok(s.clone()),
+        SExp::Integer(_,i) => bigint_to_bytes(i, Some(TConvertOption { signed: true })).map_err(|e| RunFailure::RunErr(val.loc(), e)).map(|x| x.data().clone()),
+        _ => Err(RunFailure::RunErr(val.loc(), format!("attempt to convert {} to bytes", val.to_string())))
+    }
+}
+
+fn interpret_program(prog: &FuzzProgram, args: &SExp, bindings: &Vec<Vec<FuzzOperation>>, expr: &FuzzOperation) -> Result<SExp, RunFailure> {
+    let loc = Srcloc::start(&"*".to_string());
+    match &prog.body {
+        FuzzOperation::Argref(n) => {
+            interpret_program(
+                prog,
+                args,
+                bindings,
+                &pick_argument(*n, prog, &args, &bindings)
+            )
+        },
+        FuzzOperation::Quote(exp) => Ok(exp.clone()),
+        FuzzOperation::If(cond,iftrue,iffalse) => {
+            let borrowed_cond: &FuzzOperation = cond.borrow();
+            interpret_program(prog, args, bindings, borrowed_cond).map(|cond_res| {
+                truthy(Rc::new(cond_res))
+            }).and_then(|cond_res| {
+                if cond_res {
+                    let borrowed_iftrue: &FuzzOperation = iftrue.borrow();
+                    interpret_program(prog, args, bindings, borrowed_iftrue)
+                } else {
+                    let borrowed_iffalse: &FuzzOperation = iffalse.borrow();
+                    interpret_program(prog, args, bindings, borrowed_iffalse)
+                }
+            })
+        },
+        FuzzOperation::Multiply(a,b) => {
+            let (a_val, b_val) = evaluate_to_numbers(prog, args, bindings, a.borrow(), b.borrow())?;
+            Ok(SExp::Integer(loc, a_val * b_val))
+        },
+        FuzzOperation::Sub(a,b) => {
+            let (a_val, b_val) = evaluate_to_numbers(prog, args, bindings, a.borrow(), b.borrow())?;
+            Ok(SExp::Integer(loc, a_val - b_val))
+        },
+        FuzzOperation::Sha256(lst) => {
+            let loc = Srcloc::start(&"*sha256*".to_string());
+            let mut bytes_stream = Stream::new(None);
+            for elt in lst.iter() {
+                let output = interpret_program(prog, args, bindings, &elt)?;
+                let output_bytes = byte_vec_of_sexp(&output)?;
+                bytes_stream.write(
+                    Bytes::new(Some(BytesFromType::Raw(output_bytes)))
+                );
+            }
+            Ok(SExp::Atom(loc, sha256(bytes_stream.get_value()).data().clone()))
+        },
+        FuzzOperation::Let(new_bindings,body) => {
+            let mut total_bindings = bindings.clone();
+            total_bindings.push(new_bindings.clone());
+            interpret_program(prog, args, &total_bindings, body.borrow())
+        },
+        FuzzOperation::Call(fun,call_args) => {
+            let loc = Srcloc::start(&"*rng*".to_string());
+            let called_fun = select_call(*fun, prog);
+            let args =
+                distribute_args(
+                    called_fun.1.args.clone(),
+                    &called_fun.1.to_program(prog),
+                    bindings,
+                    &call_args,
+                    0
+                );
+            interpret_program(
+                &called_fun.1.to_program(prog),
+                &args.1,
+                &Vec::new(),
+                &called_fun.1.body.clone()
+            )
+        }
+    }
+}
+
 impl FuzzProgram {
     pub fn to_sexp(&self) -> SExp {
         let mut body_vec = Vec::new();
@@ -553,5 +677,9 @@ impl FuzzProgram {
     pub fn random_args(&self) -> SExp {
         let srcloc = Srcloc::start(&"*args*".to_string());
         random_args(srcloc, self.args.clone())
+    }
+
+    pub fn interpret(&self, args: SExp) -> Result<SExp, RunFailure> {
+        interpret_program(self, &args, &Vec::new(), &self.body)
     }
 }
