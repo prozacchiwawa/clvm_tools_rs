@@ -27,6 +27,13 @@ fn main() {
 
     println!("prog: {}", prog.to_sexp().to_string());
 
+    let args = prog.random_args();
+    println!("args: {}", args.to_string());
+
+    prog.interpret(args.clone()).map(|res| {
+        println!("interpreted: {}", res.to_string());
+    }).map_err(|e| println!("error interpreting: {:?}", e));
+
     compile_file(
         &mut allocator,
         runner.clone(),
@@ -34,9 +41,6 @@ fn main() {
         &prog.to_sexp().to_string()
     ).map_err(|e| RunFailure::RunErr(e.0, e.1)).and_then(|compiled| {
         println!("compiled: {}", compiled.to_string());
-
-        let args = prog.random_args();
-        println!("args: {}", args.to_string());
 
         run(
             &mut allocator,
@@ -47,5 +51,5 @@ fn main() {
         )
     }).map(|after_run| {
         println!("result: {}", after_run.to_string());
-    }).unwrap_or_else(|e| panic!("error: {:?}", e))
+    }).unwrap_or_else(|e| println!("error compiling or running: {:?}", e));
 }

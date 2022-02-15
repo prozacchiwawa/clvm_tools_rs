@@ -592,8 +592,9 @@ fn byte_vec_of_sexp(val: &SExp) -> Result<Vec<u8>, RunFailure> {
 }
 
 fn interpret_program(prog: &FuzzProgram, args: &SExp, bindings: &Vec<Vec<FuzzOperation>>, expr: &FuzzOperation) -> Result<SExp, RunFailure> {
-    let loc = Srcloc::start(&"*".to_string());
-    match &prog.body {
+    let loc = Srcloc::start(&"*interp*".to_string());
+
+    match &expr {
         FuzzOperation::Argref(n) => {
             interpret_program(
                 prog,
