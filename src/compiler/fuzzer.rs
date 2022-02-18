@@ -129,7 +129,7 @@ fn make_operator(op: String, args: Vec<SExp>) -> SExp {
     )
 }
 
-fn distribute_args(a: ArgListType, fun: &FuzzProgram, bindings: &Vec<Vec<FuzzOperation>>, arginputs: &Vec<FuzzOperation>, argn: u8) -> (u8, SExp) {
+fn distribute_args(a: ArgListType, fun: &FuzzProgram, bindings: &Vec<Vec<FuzzOperation>>, arginputs: &Vec<FuzzOperation>, spine: bool, argn: u8) -> (u8, SExp) {
     let loc = Srcloc::start(&"*rng*".to_string());
     match a {
         ArgListType::ProperList(0) => (argn, SExp::Nil(loc.clone())),
@@ -140,7 +140,8 @@ fn distribute_args(a: ArgListType, fun: &FuzzProgram, bindings: &Vec<Vec<FuzzOpe
                     fun,
                     bindings,
                     arginputs,
-                    argn + 1
+                    spine,
+                    argn + 1,
                 );
             (
                 rest_result.0,
@@ -164,6 +165,7 @@ fn distribute_args(a: ArgListType, fun: &FuzzProgram, bindings: &Vec<Vec<FuzzOpe
                     fun,
                     bindings,
                     arginputs,
+                    false,
                     argn
                 );
             let rest_res =
@@ -172,13 +174,20 @@ fn distribute_args(a: ArgListType, fun: &FuzzProgram, bindings: &Vec<Vec<FuzzOpe
                     fun,
                     bindings,
                     arginputs,
+                    spine,
                     argn + first_res.0
                 );
+            let res =
+                if spine {
+                    SExp::Cons(l.clone(), Rc::new(first_res.1), Rc::new(rest_res.1))
+                } else {
+                    make_operator(
+                        "c".to_string(), vec!(first_res.1, rest_res.1)
+                    )
+                };
             (
                 rest_res.0,
-                make_operator(
-                    "c".to_string(), vec!(first_res.1, rest_res.1)
-                )
+                res
             )
         },
         ArgListType::Structure(_) => {
@@ -191,6 +200,122 @@ fn distribute_args(a: ArgListType, fun: &FuzzProgram, bindings: &Vec<Vec<FuzzOpe
             )
         }
     }
+}
+
+enum ArgInputsIntermediate {
+    ArgInputVec(Vec<FuzzOperation>),
+    ArgInputExpr(FuzzOperation),
+}
+
+fn first_of(prog: &FuzzProgram, bindings: &Vec<Vec<FuzzOperation>>, loc: Srcloc, arginputs: &ArgInputsIntermediate) -> Result<FuzzOperation, RunFailure> {
+    match arginputs {
+        ArgInputsIntermediate::ArgInputVec(v) => {
+            if v.len() == 0 {
+                Err(RunFailure::RunErr(loc, "first of empty input vec".to_string()))
+            } else {
+                Ok(v[0].clone())
+            }
+        },
+        ArgInputsIntermediate::ArgInputExpr(FuzzOperation::Quote(SExp::Cons(_,a,_))) => {
+            let a_borrow: &SExp = a.borrow();
+            Ok(FuzzOperation::Quote(a_borrow.clone()))
+        },
+        ArgInputsIntermediate::ArgInputExpr(v) => {
+            Err(RunFailure::RunErr(loc, format!("first of wrong arg expr {}", v.to_sexp(prog, bindings).to_string())))
+        }
+    }
+}
+
+fn rest_of(prog: &FuzzProgram, bindings: &Vec<Vec<FuzzOperation>>, loc: Srcloc, arginputs: &ArgInputsIntermediate) -> Result<ArgInputsIntermediate, RunFailure> {
+    match arginputs {
+        ArgInputsIntermediate::ArgInputVec(v) => {
+            if v.len() == 0 {
+                Err(RunFailure::RunErr(loc, "Rest off end of arguments".to_string()))
+            } else {
+                Ok(ArgInputsIntermediate::ArgInputVec(v.iter().skip(1).map(|x| x.clone()).collect()))
+            }
+        },
+        ArgInputsIntermediate::ArgInputExpr(FuzzOperation::Quote(SExp::Cons(_,_,b))) => {
+            let b_borrow: &SExp = b.borrow();
+            Ok(ArgInputsIntermediate::ArgInputExpr(FuzzOperation::Quote(b_borrow.clone())))
+        },
+        ArgInputsIntermediate::ArgInputExpr(v) => {
+            Err(RunFailure::RunErr(loc, format!("rest of wrong arg expr {}", v.to_sexp(prog, bindings).to_string())))
+        }
+    }
+}
+
+fn fuzz_cons(prog: &FuzzProgram, bindings: &Vec<Vec<FuzzOperation>>, l: Srcloc, a: FuzzOperation, b: FuzzOperation) -> Result<FuzzOperation, RunFailure> {
+    match (&a, &b) {
+        (FuzzOperation::Quote(sa), FuzzOperation::Quote(sb)) => {
+            Ok(FuzzOperation::Quote(SExp::Cons(l.clone(), Rc::new(sa.clone()), Rc::new(sb.clone()))))
+        },
+        (_, _) => {
+            Err(RunFailure::RunErr(
+                l.clone(),
+                format!(
+                    "can't combine {} and {} via cons (yet)",
+                    a.to_sexp(prog, bindings).to_string(),
+                    b.to_sexp(prog, bindings).to_string()
+                )
+            ))
+        }
+    }
+}
+
+fn interpret_args_mut(a: ArgListType, fun: &FuzzProgram, bindings: &Vec<Vec<FuzzOperation>>, arginputs: ArgInputsIntermediate, spine: bool, args_result: &mut Vec<FuzzOperation>) -> Result<Vec<FuzzOperation>, RunFailure> {
+    let loc = Srcloc::start(&"*rng*".to_string());
+    match a {
+        ArgListType::ProperList(0) => Ok(args_result.clone()),
+        ArgListType::ProperList(n) => {
+            args_result.push(first_of(fun, bindings, loc.clone(), &arginputs)?);
+            interpret_args_mut(
+                ArgListType::ProperList(n-1),
+                fun,
+                bindings,
+                rest_of(fun, bindings, loc.clone(), &arginputs)?,
+                spine,
+                args_result
+            )
+        },
+        ArgListType::Structure(SExp::Nil(l)) => Ok(args_result.clone()),
+        ArgListType::Structure(SExp::Cons(l,a,b)) => {
+            let a_borrow: &SExp = a.borrow();
+            let b_borrow: &SExp = b.borrow();
+            let head = first_of(fun, bindings, l.clone(), &arginputs)?;
+            let new_head_spec = ArgListType::Structure(a_borrow.clone());
+            let new_tail_spec = ArgListType::Structure(b_borrow.clone());
+            let mut head_result = Vec::new();
+            let _ =
+                interpret_args_mut(
+                    new_head_spec,
+                    fun,
+                    bindings,
+                    ArgInputsIntermediate::ArgInputExpr(head),
+                    false,
+                    &mut head_result
+                )?;
+            let tail = rest_of(fun, bindings, l.clone(), &arginputs)?;
+            let mut tail_result = Vec::new();
+            let _ =
+                interpret_args_mut(
+                    new_tail_spec,
+                    fun,
+                    bindings,
+                    tail,
+                    spine,
+                    &mut tail_result
+                )?;
+            args_result.push(fuzz_cons(fun, bindings, l.clone(), head_result[0].clone(), tail_result[0].clone())?);
+            Ok(args_result.clone())
+        },
+        ArgListType::Structure(_) => Ok(args_result.clone())
+    }
+}
+
+fn interpret_args(a: ArgListType, fun: &FuzzProgram, bindings: &Vec<Vec<FuzzOperation>>, arginputs: &Vec<FuzzOperation>, argn: u8) -> Result<Vec<FuzzOperation>, RunFailure> {
+    let mut args_result: Vec<FuzzOperation> = Vec::new();
+    interpret_args_mut(a, fun, bindings, ArgInputsIntermediate::ArgInputVec(arginputs.clone()), true, &mut args_result)
 }
 
 fn random_args(loc: Srcloc, a: ArgListType) -> SExp {
@@ -316,6 +441,7 @@ impl FuzzOperation {
                         fun,
                         bindings,
                         args,
+                        true,
                         0
                     );
                 SExp::Cons(
@@ -594,6 +720,8 @@ fn byte_vec_of_sexp(val: &SExp) -> Result<Vec<u8>, RunFailure> {
 fn interpret_program(prog: &FuzzProgram, args: &SExp, bindings: &Vec<Vec<FuzzOperation>>, expr: &FuzzOperation) -> Result<SExp, RunFailure> {
     let loc = Srcloc::start(&"*interp*".to_string());
 
+    println!("interpret_program {}
+
     match &expr {
         FuzzOperation::Argref(n) => {
             interpret_program(
@@ -646,17 +774,19 @@ fn interpret_program(prog: &FuzzProgram, args: &SExp, bindings: &Vec<Vec<FuzzOpe
         FuzzOperation::Call(fun,call_args) => {
             let loc = Srcloc::start(&"*rng*".to_string());
             let called_fun = select_call(*fun, prog);
-            let args =
+            let distributed_args =
                 distribute_args(
                     called_fun.1.args.clone(),
-                    &called_fun.1.to_program(prog),
+                    prog,
                     bindings,
                     &call_args,
+                    true,
                     0
                 );
+            println!("call {} with args: {}", called_fun.1.to_sexp(prog).to_string(), distributed_args.1.to_string());
             interpret_program(
                 &called_fun.1.to_program(prog),
-                &args.1,
+                &distributed_args.1,
                 &Vec::new(),
                 &called_fun.1.body.clone()
             )
