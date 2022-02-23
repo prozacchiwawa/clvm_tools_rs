@@ -38,6 +38,12 @@ fn main() {
         let args = prog.random_args();
         println!("args: {}", args.to_string());
 
+        let interp_res = prog.interpret(args.clone());
+        match interp_res {
+            Ok(r) => println!("interp-ok: {}", r.to_string()),
+            Err(e) => println!("interp-error: {}", e.to_string())
+        }
+
         run(
             &mut allocator,
             runner.clone(),

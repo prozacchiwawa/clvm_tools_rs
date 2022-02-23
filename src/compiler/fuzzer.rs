@@ -5,8 +5,10 @@ use rand::prelude::Distribution;
 use rand::Rng;
 use rand::random;
 use std::borrow::Borrow;
+use std::collections::HashMap;
 use std::rc::Rc;
 
+use crate::compiler::runtypes::RunFailure;
 use crate::compiler::sexp::SExp;
 use crate::compiler::srcloc::Srcloc;
 
@@ -356,7 +358,7 @@ fn random_operation<R: Rng + ?Sized>(rng: &mut R, depth: u8, must_call: bool) ->
         return make_random_call(rng, depth);
     }
 
-    let mut selection = random_u8();
+    let selection = random_u8();
 
     if (selection < 5) {
         FuzzOperation::If(
@@ -539,6 +541,111 @@ impl Distribution<FuzzProgram> for Standard {
     }
 }
 
+fn loc_of(r: &Result<SExp, RunFailure>) -> Srcloc {
+    r.as_ref().map(|x| x.loc()).unwrap_or_else(|e| {
+        match e {
+            RunFailure::RunErr(l,_) => l.clone(),
+            RunFailure::RunExn(l,_) => l.clone()
+        }
+    })
+}
+
+fn make_assignments(program_args: Rc<SExp>, input_args: Result<SExp, RunFailure>, result_map: &mut HashMap<Vec<u8>, Result<FuzzOperation, RunFailure>>) {
+    match (program_args.borrow(), input_args.borrow()) {
+        (SExp::Cons(_,ph,pt), Ok(SExp::Cons(_,ih,it))) => {
+            let ih_borrow: &SExp = ih.borrow();
+            let it_borrow: &SExp = it.borrow();
+            make_assignments(ph.clone(), Ok(ih_borrow.clone()), result_map);
+            make_assignments(pt.clone(), Ok(it_borrow.clone()), result_map);
+        },
+        (SExp::Cons(_,ph,pt), v) => {
+            make_assignments(ph.clone(), Err(RunFailure::RunErr(loc_of(v), format!("path subdividing {:?} for args {}", v, program_args.to_string()))), result_map);
+            make_assignments(pt.clone(), Err(RunFailure::RunErr(loc_of(v), format!("path subdividing {:?} for args {}", v, program_args.to_string()))), result_map);
+        },
+        (SExp::Atom(_,name), v) => {
+            result_map.insert(name.clone(), v.as_ref().map(|s| FuzzOperation::Quote(s.clone())).map_err(|e| e.clone()));
+        },
+        _ => { }
+    }
+}
+
+fn replace_args(prog: &FuzzProgram, args: &HashMap<Vec<u8>, Result<FuzzOperation, RunFailure>>, bindings: &Vec<Vec<FuzzOperation>>) -> Result<FuzzOperation, RunFailure> {
+    let loc = Srcloc::start(&"*replace_args*".to_string());
+    match &prog.body {
+        FuzzOperation::Argref(n) => {
+            let argres = select_argument(*n, prog, bindings);
+            let name_u8 = argres.0.as_bytes().to_vec();
+            match args.get(&name_u8) {
+                Some(v) => v.clone(),
+                None => Ok(prog.body.clone())
+            }
+        },
+        FuzzOperation::If(cond,iftrue,iffalse) => {
+            let cond_borrowed: &FuzzOperation = cond.borrow();
+            let iftrue_borrowed: &FuzzOperation = iftrue.borrow();
+            let iffalse_borrowed: &FuzzOperation = iffalse.borrow();
+            let cond_prog = prog.with_exp(cond_borrowed);
+            let new_cond = replace_args(&cond_prog, args, bindings)?;
+            let iftrue_prog = prog.with_exp(iftrue_borrowed);
+            let new_iftrue = replace_args(&iftrue_prog, args, bindings)?;
+            let iffalse_prog = prog.with_exp(iffalse_borrowed);
+            let new_iffalse = replace_args(&iffalse_prog, args, bindings)?;
+            Ok(FuzzOperation::If(Rc::new(new_cond), Rc::new(new_iftrue), Rc::new(new_iffalse)))
+        },
+        FuzzOperation::Multiply(a,b) => {
+            let a_borrowed: &FuzzOperation = a.borrow();
+            let b_borrowed: &FuzzOperation = b.borrow();
+            let a_prog = prog.with_exp(a_borrowed);
+            let b_prog = prog.with_exp(b_borrowed);
+            let new_a = replace_args(&a_prog, args, bindings)?;
+            let new_b = replace_args(&b_prog, args, bindings)?;
+            Ok(FuzzOperation::Multiply(Rc::new(new_a), Rc::new(new_b)))
+        },
+        FuzzOperation::Sub(a,b) => {
+            let a_borrowed: &FuzzOperation = a.borrow();
+            let b_borrowed: &FuzzOperation = b.borrow();
+            let a_prog = prog.with_exp(a_borrowed);
+            let b_prog = prog.with_exp(b_borrowed);
+            let new_a = replace_args(&a_prog, args, bindings)?;
+            let new_b = replace_args(&b_prog, args, bindings)?;
+            Ok(FuzzOperation::Sub(Rc::new(new_a), Rc::new(new_b)))
+        },
+        FuzzOperation::Sha256(inputs) => {
+            let mut new_inputs = Vec::new();
+            for i in inputs.iter() {
+                let prog_with_i = prog.with_exp(i);
+                new_inputs.push(replace_args(&prog_with_i, args, bindings)?);
+            }
+            Ok(FuzzOperation::Sha256(new_inputs))
+        },
+        FuzzOperation::Let(local_bindings,expr) => {
+            let mut new_local_bindings = Vec::new();
+            for b in local_bindings.iter() {
+                let prog_with_b = prog.with_exp(b);
+                new_local_bindings.push(replace_args(&prog_with_b, args, bindings)?);
+            }
+            let mut new_bindings = bindings.clone();
+            new_bindings.push(new_local_bindings);
+            let borrowed_expr: &FuzzOperation = expr.borrow();
+            let prog_with_expr = prog.with_exp(borrowed_expr);
+            let mut applied_bindings = bindings.clone();
+            for b in new_bindings.iter() {
+                applied_bindings.push(b.clone());
+            }
+            replace_args(&prog_with_expr, args, &applied_bindings)
+        },
+        FuzzOperation::Call(n,inputs) => {
+            let mut new_inputs = Vec::new();
+            for i in inputs.iter() {
+                let prog_with_i = prog.with_exp(i);
+                new_inputs.push(replace_args(&prog_with_i, args, bindings)?);
+            }
+            Ok(FuzzOperation::Call(*n,new_inputs))
+        },
+        FuzzOperation::Quote(sexp) => Ok(prog.body.clone())
+    }
+}
+
 impl FuzzProgram {
     pub fn to_sexp(&self) -> SExp {
         let mut body_vec = Vec::new();
@@ -550,8 +657,26 @@ impl FuzzProgram {
         make_operator("mod".to_string(), body_vec)
     }
 
+    pub fn with_exp(&self, exp: &FuzzOperation) -> FuzzProgram {
+        FuzzProgram {
+            args: self.args.clone(),
+            functions: self.functions.clone(),
+            body: exp.clone()
+        }
+    }
+
     pub fn random_args(&self) -> SExp {
         let srcloc = Srcloc::start(&"*args*".to_string());
         random_args(srcloc, self.args.clone())
+    }
+
+    pub fn interpret(&self, args: SExp) -> Result<SExp, RunFailure> {
+        let srcloc = Srcloc::start(&"*interp*".to_string());
+        let mut assignment_map = HashMap::new();
+        let prog_args_sexp = self.args.to_sexp();
+        make_assignments(Rc::new(prog_args_sexp), Ok(args), &mut assignment_map);
+        let translated_expr = replace_args(self, &assignment_map, &Vec::new())?;
+        println!("translated_expr: {}", translated_expr.to_sexp(self, &Vec::new()).to_string());
+        Ok(SExp::Nil(srcloc))
     }
 }
