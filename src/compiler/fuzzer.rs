@@ -776,6 +776,20 @@ fn do_subtract(prog: &FuzzProgram, a: &FuzzOperation, b: &FuzzOperation) -> Resu
     }
 }
 
+fn do_multiply(prog: &FuzzProgram, a: &FuzzOperation, b: &FuzzOperation) -> Result<FuzzOperation, RunFailure> {
+    let loc = Srcloc::start(&"*err*".to_string());
+    match (a, b) {
+        (FuzzOperation::Quote(a), FuzzOperation::Quote(b)) => {
+            let a_num = a.get_number().map_err(|e| RunFailure::RunErr(e.0, e.1))?;
+            let b_num = b.get_number().map_err(|e| RunFailure::RunErr(e.0, e.1))?;
+            Ok(FuzzOperation::Quote(SExp::Integer(loc, (a_num * b_num).clone())))
+        },
+        _ => {
+            Err(RunFailure::RunErr(loc, format!("error subtracting {:?} from {:?}", b, a)))
+        }
+    }
+}
+
 fn match_quote(op: &FuzzOperation) -> Result<FuzzOperation, FuzzOperation> {
     match op {
         FuzzOperation::Quote(_) => Ok(op.clone()),
@@ -817,7 +831,6 @@ impl FuzzProgram {
             Err(v) => { }
         }
 
-        println!("args {:?}", args);
         let srcloc = Srcloc::start(&"*interp*".to_string());
         let mut assignment_map = HashMap::new();
         let mut prog_args_sexp = SExp::Nil(srcloc.clone());
@@ -831,7 +844,6 @@ impl FuzzProgram {
         }
 
         make_assignments(Rc::new(self.args.to_sexp()), Ok(prog_args_sexp), &mut assignment_map);
-        println!("assignment map {:?}", assignment_map);
         let translated_expr = replace_args(self, &assignment_map, &Vec::new())?;
         println!("translated_expr: {}", translated_expr.to_sexp(self, &Vec::new(), true).to_string());
         match &translated_expr {
@@ -852,8 +864,12 @@ impl FuzzProgram {
             FuzzOperation::Sub(a,b) => {
                 let interpreted_a = self.with_exp(a).interpret_op(args)?;
                 let interpreted_b = self.with_exp(b).interpret_op(args)?;
-                let res = do_subtract(self, &interpreted_a, &interpreted_b)?;
-                Ok(res)
+                do_subtract(self, &interpreted_a, &interpreted_b)
+            },
+            FuzzOperation::Multiply(a,b) => {
+                let interpreted_a = self.with_exp(a).interpret_op(args)?;
+                let interpreted_b = self.with_exp(b).interpret_op(args)?;
+                do_multiply(self, &interpreted_a, &interpreted_b)
             },
             FuzzOperation::Sha256(vals) => {
                 let mut hasher = sha2::Sha256::new();
@@ -1048,6 +1064,37 @@ fn try_interp_simple_sha256_and_sub_with_fun_arg_swap_2() {
             body: FuzzOperation::Sub(Rc::new(FuzzOperation::Argref(1)), Rc::new(FuzzOperation::Argref(0)))
         }),
         body: FuzzOperation::Sha256(vec!(FuzzOperation::Call(0, vec!(FuzzOperation::Argref(0), FuzzOperation::Argref(1)))))
+    };
+    let args = vec!(
+        FuzzOperation::Quote(SExp::Integer(loc.clone(), 23_u32.to_bigint().unwrap())),
+        FuzzOperation::Quote(SExp::Integer(loc.clone(), 19_u32.to_bigint().unwrap()))
+    );
+    assert_eq!(Ok(result), prog.interpret_op(&args));
+}
+
+#[test]
+fn try_interp_simple_sha256_and_sub_with_fun_arg_swap_diff_args() {
+    let loc = Srcloc::start(&"*test*".to_string());
+    let result = FuzzOperation::Quote(SExp::Integer(loc.clone(), 8_i32.to_bigint().unwrap()));
+    let prog = FuzzProgram {
+        args: ArgListType::ProperList(2),
+        functions: vec!(FuzzFunction {
+            inline: false,
+            number: 0,
+            args: ArgListType::ProperList(3),
+            body: FuzzOperation::Multiply(
+                Rc::new(FuzzOperation::Sub(
+                    Rc::new(FuzzOperation::Argref(0)),
+                    Rc::new(FuzzOperation::Argref(1))
+                )),
+                Rc::new(FuzzOperation::Argref(2))
+            )
+        }),
+        body: FuzzOperation::Call(0, vec!(
+            FuzzOperation::Argref(0),
+            FuzzOperation::Argref(1),
+            FuzzOperation::Quote(SExp::Integer(loc.clone(), 2_u32.to_bigint().unwrap()))
+        ))
     };
     let args = vec!(
         FuzzOperation::Quote(SExp::Integer(loc.clone(), 23_u32.to_bigint().unwrap())),
