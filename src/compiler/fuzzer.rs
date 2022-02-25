@@ -32,6 +32,11 @@ pub enum FuzzOperation {
     Call(u8,Vec<FuzzOperation>),
 }
 
+fn fuzz_num(x: i32) -> FuzzOperation {
+    let loc = Srcloc::start(&"*int*".to_string());
+    FuzzOperation::Quote(SExp::Integer(loc, x.to_bigint().unwrap()))
+}
+
 impl PartialEq for FuzzOperation {
     fn eq(&self, other: &Self) -> bool {
         match (self, other) {
@@ -957,16 +962,13 @@ fn try_subtract_simple() {
 #[test]
 fn try_interp_simple_subtraction() {
     let loc = Srcloc::start(&"*test*".to_string());
-    let result = FuzzOperation::Quote(SExp::Integer(loc.clone(), 1_u32.to_bigint().unwrap()));
+    let result = fuzz_num(1);
     let prog = FuzzProgram {
         args: ArgListType::ProperList(2),
         functions: Vec::new(),
         body: FuzzOperation::Sub(Rc::new(FuzzOperation::Argref(0)), Rc::new(FuzzOperation::Argref(1)))
     };
-    let args = vec!(
-        FuzzOperation::Quote(SExp::Integer(loc.clone(), 100_u32.to_bigint().unwrap())),
-        FuzzOperation::Quote(SExp::Integer(loc.clone(), 99_u32.to_bigint().unwrap()))
-    );
+    let args = vec!(fuzz_num(100), fuzz_num(99));
     assert_eq!(Ok(result), prog.interpret_op(&args));
 }
 
@@ -984,10 +986,7 @@ fn try_interp_simple_sha256() {
         functions: Vec::new(),
         body: FuzzOperation::Sha256(vec!(FuzzOperation::Argref(0), FuzzOperation::Argref(1)))
     };
-    let args = vec!(
-        FuzzOperation::Quote(SExp::Integer(loc.clone(), 19_u32.to_bigint().unwrap())),
-        FuzzOperation::Quote(SExp::Integer(loc.clone(), 23_u32.to_bigint().unwrap()))
-    );
+    let args = vec!(fuzz_num(19), fuzz_num(23));
     assert_eq!(Ok(result), prog.interpret_op(&args));
 }
 
@@ -1005,10 +1004,7 @@ fn try_interp_simple_sha256_and_sub() {
         functions: Vec::new(),
         body: FuzzOperation::Sha256(vec!(FuzzOperation::Sub(Rc::new(FuzzOperation::Argref(0)), Rc::new(FuzzOperation::Argref(1)))))
     };
-    let args = vec!(
-        FuzzOperation::Quote(SExp::Integer(loc.clone(), 19_u32.to_bigint().unwrap())),
-        FuzzOperation::Quote(SExp::Integer(loc.clone(), 23_u32.to_bigint().unwrap()))
-    );
+    let args = vec!(fuzz_num(19), fuzz_num(23));
     assert_eq!(Ok(result), prog.interpret_op(&args));
 }
 
@@ -1031,10 +1027,7 @@ fn try_interp_simple_sha256_and_sub_with_fun() {
         }),
         body: FuzzOperation::Sha256(vec!(FuzzOperation::Call(0, vec!(FuzzOperation::Argref(0), FuzzOperation::Argref(1)))))
     };
-    let args = vec!(
-        FuzzOperation::Quote(SExp::Integer(loc.clone(), 19_u32.to_bigint().unwrap())),
-        FuzzOperation::Quote(SExp::Integer(loc.clone(), 23_u32.to_bigint().unwrap()))
-    );
+    let args = vec!(fuzz_num(19), fuzz_num(23));
     assert_eq!(Ok(result), prog.interpret_op(&args));
 }
 
@@ -1057,10 +1050,7 @@ fn try_interp_simple_sha256_and_sub_with_fun_arg_swap_1() {
         }),
         body: FuzzOperation::Sha256(vec!(FuzzOperation::Call(0, vec!(FuzzOperation::Argref(1), FuzzOperation::Argref(0)))))
     };
-    let args = vec!(
-        FuzzOperation::Quote(SExp::Integer(loc.clone(), 23_u32.to_bigint().unwrap())),
-        FuzzOperation::Quote(SExp::Integer(loc.clone(), 19_u32.to_bigint().unwrap()))
-    );
+    let args = vec!(fuzz_num(23), fuzz_num(19));
     assert_eq!(Ok(result), prog.interpret_op(&args));
 }
 
@@ -1083,10 +1073,7 @@ fn try_interp_simple_sha256_and_sub_with_fun_arg_swap_2() {
         }),
         body: FuzzOperation::Sha256(vec!(FuzzOperation::Call(0, vec!(FuzzOperation::Argref(0), FuzzOperation::Argref(1)))))
     };
-    let args = vec!(
-        FuzzOperation::Quote(SExp::Integer(loc.clone(), 23_u32.to_bigint().unwrap())),
-        FuzzOperation::Quote(SExp::Integer(loc.clone(), 19_u32.to_bigint().unwrap()))
-    );
+    let args = vec!(fuzz_num(23), fuzz_num(19));
     assert_eq!(Ok(result), prog.interpret_op(&args));
 }
 
@@ -1111,20 +1098,16 @@ fn try_interp_simple_sha256_and_sub_with_fun_arg_swap_diff_args() {
         body: FuzzOperation::Call(0, vec!(
             FuzzOperation::Argref(0),
             FuzzOperation::Argref(1),
-            FuzzOperation::Quote(SExp::Integer(loc.clone(), 2_u32.to_bigint().unwrap()))
+            fuzz_num(2)
         ))
     };
-    let args = vec!(
-        FuzzOperation::Quote(SExp::Integer(loc.clone(), 23_u32.to_bigint().unwrap())),
-        FuzzOperation::Quote(SExp::Integer(loc.clone(), 19_u32.to_bigint().unwrap()))
-    );
+    let args = vec!(fuzz_num(23), fuzz_num(19));
     assert_eq!(Ok(result), prog.interpret_op(&args));
 }
 
 #[test]
 fn try_interp_simple_if_1() {
     let loc = Srcloc::start(&"*test*".to_string());
-    let num = |x: i32| FuzzOperation::Quote(SExp::Integer(loc.clone(), x.to_bigint().unwrap()));
 
     let prog = FuzzProgram {
         args: ArgListType::ProperList(3),
@@ -1135,9 +1118,14 @@ fn try_interp_simple_if_1() {
             Rc::new(FuzzOperation::Argref(2))
         )
     };
-    let args_false = vec!(num(0), num(23), num(19));
-    let args_true = vec!(num(1), num(23), num(19));
+    let args_false = vec!(fuzz_num(0), fuzz_num(23), fuzz_num(19));
+    let args_true = vec!(fuzz_num(1), fuzz_num(23), fuzz_num(19));
 
-    assert_eq!(Ok(num(19)), prog.interpret_op(&args_false));
-    assert_eq!(Ok(num(23)), prog.interpret_op(&args_true));
+    assert_eq!(Ok(fuzz_num(19)), prog.interpret_op(&args_false));
+    assert_eq!(Ok(fuzz_num(23)), prog.interpret_op(&args_true));
+}
+
+#[test]
+fn try_destructured_args_1() {
+    let loc = Srcloc::start(&"*test*".to_string());
 }
