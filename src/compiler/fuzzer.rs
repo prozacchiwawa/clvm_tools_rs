@@ -776,57 +776,6 @@ fn do_subtract(prog: &FuzzProgram, a: &FuzzOperation, b: &FuzzOperation) -> Resu
     }
 }
 
-#[test]
-fn try_subtract_simple() {
-    let loc = Srcloc::start(&"*test*".to_string());
-    let result = FuzzOperation::Quote(SExp::Atom(loc.clone(), vec!(1)));
-    let a = FuzzOperation::Quote(SExp::Atom(loc.clone(), vec!(43)));
-    let b = FuzzOperation::Quote(SExp::Atom(loc.clone(), vec!(42)));
-    let prog = FuzzProgram {
-        args: ArgListType::ProperList(0),
-        functions: Vec::new(),
-        body: FuzzOperation::Sub(Rc::new(a.clone()), Rc::new(b.clone()))
-    };
-    assert_eq!(Ok(result), do_subtract(&prog, &a, &b));
-}
-
-#[test]
-fn try_interp_simple_subtraction() {
-    let loc = Srcloc::start(&"*test*".to_string());
-    let result = FuzzOperation::Quote(SExp::Integer(loc.clone(), 1_u32.to_bigint().unwrap()));
-    let prog = FuzzProgram {
-        args: ArgListType::ProperList(2),
-        functions: Vec::new(),
-        body: FuzzOperation::Sub(Rc::new(FuzzOperation::Argref(0)), Rc::new(FuzzOperation::Argref(1)))
-    };
-    let args = vec!(
-        FuzzOperation::Quote(SExp::Integer(loc.clone(), 100_u32.to_bigint().unwrap())),
-        FuzzOperation::Quote(SExp::Integer(loc.clone(), 99_u32.to_bigint().unwrap()))
-    );
-    assert_eq!(Ok(result), prog.interpret_op(&args));
-}
-
-#[test]
-fn try_interp_simple_sha256() {
-    let loc = Srcloc::start(&"*test*".to_string());
-    let result = FuzzOperation::Quote(SExp::Atom(loc.clone(), vec!(
-        0x78, 0x53, 0xe8, 0x85, 0x6e, 0x95, 0xcd, 0xad,
-        0x7c, 0xea, 0x9b, 0x99, 0xeb, 0x08, 0xd7, 0xac,
-        0xf4, 0x02, 0x20, 0x4e, 0x63, 0xa8, 0x3c, 0x67,
-        0x2e, 0xa6, 0x17, 0x49, 0x28, 0x16, 0x66, 0x0d,
-    )));
-    let prog = FuzzProgram {
-        args: ArgListType::ProperList(2),
-        functions: Vec::new(),
-        body: FuzzOperation::Sha256(vec!(FuzzOperation::Argref(0), FuzzOperation::Argref(1)))
-    };
-    let args = vec!(
-        FuzzOperation::Quote(SExp::Integer(loc.clone(), 19_u32.to_bigint().unwrap())),
-        FuzzOperation::Quote(SExp::Integer(loc.clone(), 23_u32.to_bigint().unwrap()))
-    );
-    assert_eq!(Ok(result), prog.interpret_op(&args));
-}
-
 fn match_quote(op: &FuzzOperation) -> Result<FuzzOperation, FuzzOperation> {
     match op {
         FuzzOperation::Quote(_) => Ok(op.clone()),
@@ -955,4 +904,55 @@ impl FuzzProgram {
         let result = self.interpret_op(&opvec)?;
         Ok(result.to_sexp(self, &Vec::new(), true))
     }
+}
+
+#[test]
+fn try_subtract_simple() {
+    let loc = Srcloc::start(&"*test*".to_string());
+    let result = FuzzOperation::Quote(SExp::Atom(loc.clone(), vec!(1)));
+    let a = FuzzOperation::Quote(SExp::Atom(loc.clone(), vec!(43)));
+    let b = FuzzOperation::Quote(SExp::Atom(loc.clone(), vec!(42)));
+    let prog = FuzzProgram {
+        args: ArgListType::ProperList(0),
+        functions: Vec::new(),
+        body: FuzzOperation::Sub(Rc::new(a.clone()), Rc::new(b.clone()))
+    };
+    assert_eq!(Ok(result), do_subtract(&prog, &a, &b));
+}
+
+#[test]
+fn try_interp_simple_subtraction() {
+    let loc = Srcloc::start(&"*test*".to_string());
+    let result = FuzzOperation::Quote(SExp::Integer(loc.clone(), 1_u32.to_bigint().unwrap()));
+    let prog = FuzzProgram {
+        args: ArgListType::ProperList(2),
+        functions: Vec::new(),
+        body: FuzzOperation::Sub(Rc::new(FuzzOperation::Argref(0)), Rc::new(FuzzOperation::Argref(1)))
+    };
+    let args = vec!(
+        FuzzOperation::Quote(SExp::Integer(loc.clone(), 100_u32.to_bigint().unwrap())),
+        FuzzOperation::Quote(SExp::Integer(loc.clone(), 99_u32.to_bigint().unwrap()))
+    );
+    assert_eq!(Ok(result), prog.interpret_op(&args));
+}
+
+#[test]
+fn try_interp_simple_sha256() {
+    let loc = Srcloc::start(&"*test*".to_string());
+    let result = FuzzOperation::Quote(SExp::Atom(loc.clone(), vec!(
+        0x78, 0x53, 0xe8, 0x85, 0x6e, 0x95, 0xcd, 0xad,
+        0x7c, 0xea, 0x9b, 0x99, 0xeb, 0x08, 0xd7, 0xac,
+        0xf4, 0x02, 0x20, 0x4e, 0x63, 0xa8, 0x3c, 0x67,
+        0x2e, 0xa6, 0x17, 0x49, 0x28, 0x16, 0x66, 0x0d,
+    )));
+    let prog = FuzzProgram {
+        args: ArgListType::ProperList(2),
+        functions: Vec::new(),
+        body: FuzzOperation::Sha256(vec!(FuzzOperation::Argref(0), FuzzOperation::Argref(1)))
+    };
+    let args = vec!(
+        FuzzOperation::Quote(SExp::Integer(loc.clone(), 19_u32.to_bigint().unwrap())),
+        FuzzOperation::Quote(SExp::Integer(loc.clone(), 23_u32.to_bigint().unwrap()))
+    );
+    assert_eq!(Ok(result), prog.interpret_op(&args));
 }
