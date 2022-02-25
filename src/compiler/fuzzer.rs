@@ -8,6 +8,9 @@ use std::borrow::Borrow;
 use std::collections::HashMap;
 use std::rc::Rc;
 
+use sha2::{Sha256, Digest};
+use crate::classic::clvm::casts::{bigint_to_bytes, TConvertOption};
+
 use crate::compiler::runtypes::RunFailure;
 use crate::compiler::sexp::SExp;
 use crate::compiler::srcloc::Srcloc;
@@ -803,6 +806,34 @@ fn try_interp_simple_subtraction() {
     assert_eq!(Ok(result), prog.interpret_op(&args));
 }
 
+#[test]
+fn try_interp_simple_sha256() {
+    let loc = Srcloc::start(&"*test*".to_string());
+    let result = FuzzOperation::Quote(SExp::Atom(loc.clone(), vec!(
+        0x78, 0x53, 0xe8, 0x85, 0x6e, 0x95, 0xcd, 0xad,
+        0x7c, 0xea, 0x9b, 0x99, 0xeb, 0x08, 0xd7, 0xac,
+        0xf4, 0x02, 0x20, 0x4e, 0x63, 0xa8, 0x3c, 0x67,
+        0x2e, 0xa6, 0x17, 0x49, 0x28, 0x16, 0x66, 0x0d,
+    )));
+    let prog = FuzzProgram {
+        args: ArgListType::ProperList(2),
+        functions: Vec::new(),
+        body: FuzzOperation::Sha256(vec!(FuzzOperation::Argref(0), FuzzOperation::Argref(1)))
+    };
+    let args = vec!(
+        FuzzOperation::Quote(SExp::Integer(loc.clone(), 19_u32.to_bigint().unwrap())),
+        FuzzOperation::Quote(SExp::Integer(loc.clone(), 23_u32.to_bigint().unwrap()))
+    );
+    assert_eq!(Ok(result), prog.interpret_op(&args));
+}
+
+fn match_quote(op: &FuzzOperation) -> Result<FuzzOperation, FuzzOperation> {
+    match op {
+        FuzzOperation::Quote(_) => Ok(op.clone()),
+        _ => Err(op.clone())
+    }
+}
+
 impl FuzzProgram {
     pub fn to_sexp(&self) -> SExp {
         let mut body_vec = Vec::new();
@@ -832,6 +863,11 @@ impl FuzzProgram {
     }
 
     pub fn interpret_op(&self, args: &Vec<FuzzOperation>) -> Result<FuzzOperation, RunFailure> {
+        match match_quote(&self.body) {
+            Ok(v) => return Ok(self.body.clone()),
+            Err(v) => { }
+        }
+
         println!("args {:?}", args);
         let srcloc = Srcloc::start(&"*interp*".to_string());
         let mut assignment_map = HashMap::new();
@@ -844,6 +880,7 @@ impl FuzzProgram {
                 Rc::new(prog_args_sexp)
             );
         }
+
         make_assignments(Rc::new(self.args.to_sexp()), Ok(prog_args_sexp), &mut assignment_map);
         println!("assignment map {:?}", assignment_map);
         let translated_expr = replace_args(self, &assignment_map, &Vec::new())?;
@@ -864,12 +901,30 @@ impl FuzzProgram {
                 }.interpret_op(&interpreted_args)
             },
             FuzzOperation::Sub(a,b) => {
-                println!("subtract {} from {}", b.to_sexp(self, &Vec::new(), true).to_string(), a.to_sexp(self, &Vec::new(), true).to_string());
                 let interpreted_a = self.with_exp(a).interpret_op(args)?;
                 let interpreted_b = self.with_exp(b).interpret_op(args)?;
                 let res = do_subtract(self, &interpreted_a, &interpreted_b)?;
-                println!("subtract result {}", res.to_sexp(self, &Vec::new(), true).to_string());
                 Ok(res)
+            },
+            FuzzOperation::Sha256(vals) => {
+                let mut hasher = sha2::Sha256::new();
+                for v in vals.iter() {
+                    let interpreted_v = self.with_exp(v).interpret_op(args)?;
+                    match interpreted_v {
+                        FuzzOperation::Quote(SExp::Atom(_,v)) => {
+                            hasher.update(v);
+                        },
+                        FuzzOperation::Quote(SExp::Integer(_,i)) => {
+                            let int_bytes = bigint_to_bytes(&i, Some(TConvertOption { signed: true })).unwrap().data().to_vec();
+                            hasher.update(int_bytes);
+                        },
+                        _ => {
+                            return Err(RunFailure::RunErr(srcloc, format!("Uninterpreted {} in sha256", interpreted_v.to_sexp(self, &Vec::new(), true).to_string())));
+                        }
+                    }
+                }
+                let hash_result = hasher.finalize();
+                Ok(FuzzOperation::Quote(SExp::Atom(srcloc.clone(), hash_result.to_vec())))
             },
             _ => {
                 Err(RunFailure::RunErr(srcloc, format!("Don't know how to interpret {}", translated_expr.to_sexp(self, &Vec::new(), true).to_string())))
