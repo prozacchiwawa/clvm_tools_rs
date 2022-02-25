@@ -1128,4 +1128,44 @@ fn try_interp_simple_if_1() {
 #[test]
 fn try_destructured_args_1() {
     let loc = Srcloc::start(&"*test*".to_string());
+
+    let prog = FuzzProgram {
+        args: ArgListType::Structure(SExp::Cons(
+            loc.clone(),
+            Rc::new(SExp::atom_from_string(loc.clone(), &"a1".to_string())),
+            Rc::new(SExp::Cons(
+                loc.clone(),
+                Rc::new(SExp::Cons(
+                    loc.clone(),
+                    Rc::new(SExp::atom_from_string(loc.clone(), &"b1".to_string())),
+                    Rc::new(SExp::atom_from_string(loc.clone(), &"b2".to_string()))
+                )),
+                Rc::new(SExp::Nil(loc.clone()))
+            ))
+        )),
+        functions: Vec::new(),
+        body: FuzzOperation::Sha256(vec!(
+            FuzzOperation::Argref(0),
+            FuzzOperation::Argref(1),
+            FuzzOperation::Argref(2))
+        )
+    };
+
+    let interp_args = vec!(
+        fuzz_num(1234),
+        FuzzOperation::Quote(SExp::Cons(
+            loc.clone(),
+            Rc::new(SExp::Integer(loc.clone(), 5678_i32.to_bigint().unwrap())),
+            Rc::new(SExp::Integer(loc.clone(), 9101112_i32.to_bigint().unwrap()))
+        ))
+    );
+
+    let result = FuzzOperation::Quote(SExp::Atom(loc.clone(), vec!(
+        0xfa, 0x4e, 0x77, 0x0a, 0xa0, 0x40, 0xd7, 0x2c,
+        0xc0, 0x83, 0x3c, 0x81, 0x26, 0x9b, 0xf2, 0x68,
+        0x86, 0x77, 0x8c, 0xd9, 0x65, 0xc3, 0x62, 0x3a,
+        0x93, 0xfa, 0x5d, 0xa9, 0x49, 0x0b, 0x52, 0xfc,
+    )));
+
+    assert_eq!(Ok(result), prog.interpret_op(&interp_args));
 }
