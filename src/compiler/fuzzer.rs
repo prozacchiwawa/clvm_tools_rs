@@ -4,13 +4,16 @@ use rand::distributions::Standard;
 use rand::prelude::Distribution;
 use rand::Rng;
 use rand::random;
+
+use sha2::{Sha256, Digest};
+
 use std::borrow::Borrow;
 use std::collections::HashMap;
 use std::rc::Rc;
 
-use sha2::{Sha256, Digest};
 use crate::classic::clvm::casts::{bigint_to_bytes, TConvertOption};
 
+use crate::compiler::clvm::truthy;
 use crate::compiler::runtypes::RunFailure;
 use crate::compiler::sexp::SExp;
 use crate::compiler::srcloc::Srcloc;
@@ -418,23 +421,23 @@ fn random_operation<R: Rng + ?Sized>(rng: &mut R, depth: u8, must_call: bool) ->
 
     let selection = random_u8();
 
-    if (selection < 5) {
+    if selection < 5 {
         FuzzOperation::If(
             Rc::new(random_operation(rng, depth + 1, false)),
             Rc::new(random_operation(rng, depth + 1, false)),
             Rc::new(random_operation(rng, depth + 1, false))
         )
-    } else if (selection < 10) {
+    } else if selection < 10 {
         FuzzOperation::Multiply(
             Rc::new(random_operation(rng, depth + 1, false)),
             Rc::new(random_operation(rng, depth + 1, false))
         )
-    } else if (selection < 20) {
+    } else if selection < 20 {
         FuzzOperation::Sub(
             Rc::new(random_operation(rng, depth + 1, false)),
             Rc::new(random_operation(rng, depth + 1, false))
         )
-    } else if (selection < 30) {
+    } else if selection < 30 {
         let mut args = Vec::new();
         let mut and_one_more: f64 = random();
 
@@ -449,7 +452,7 @@ fn random_operation<R: Rng + ?Sized>(rng: &mut R, depth: u8, must_call: bool) ->
         }
 
         FuzzOperation::Sha256(args)
-    } else if (selection < 35) {
+    } else if selection < 35 {
         let mut bindings = Vec::new();
         let mut and_one_more: f64 = random();
 
@@ -467,9 +470,9 @@ fn random_operation<R: Rng + ?Sized>(rng: &mut R, depth: u8, must_call: bool) ->
             bindings,
             Rc::new(random_operation(rng, depth + 1, false))
         )
-    } else if (selection < 50) {
+    } else if selection < 50 {
         make_random_call(rng, depth + 1)
-    } else if (selection < 60) {
+    } else if selection < 60 {
         FuzzOperation::Quote(SExp::random_atom())
     } else {
         FuzzOperation::Argref(random_u8())
@@ -561,7 +564,7 @@ impl FuzzFunction {
     fn to_sexp(&self, fun: &FuzzProgram) -> SExp {
         let fuzzloc = Srcloc::start(&"*fuzz*".to_string());
         let initial_atom =
-            if (self.inline) {
+            if self.inline {
                 SExp::atom_from_string(
                     fuzzloc.clone(),
                     &"defun-inline".to_string()
@@ -797,6 +800,13 @@ fn match_quote(op: &FuzzOperation) -> Result<FuzzOperation, FuzzOperation> {
     }
 }
 
+fn match_sexp(op: &FuzzOperation) -> Result<SExp, FuzzOperation> {
+    match op {
+        FuzzOperation::Quote(s) => Ok(s.clone()),
+        _ => Err(op.clone())
+    }
+}
+
 impl FuzzProgram {
     pub fn to_sexp(&self) -> SExp {
         let mut body_vec = Vec::new();
@@ -890,6 +900,14 @@ impl FuzzProgram {
                 }
                 let hash_result = hasher.finalize();
                 Ok(FuzzOperation::Quote(SExp::Atom(srcloc.clone(), hash_result.to_vec())))
+            },
+            FuzzOperation::If(cond, dothen, doelse) => {
+                let interpreted_cond = match_sexp(&self.with_exp(cond).interpret_op(args)?).map_err(|e| RunFailure::RunErr(srcloc.clone(), format!("uninterpreted {} in if", e.to_sexp(self, &Vec::new(), true).to_string())))?;
+                if truthy(Rc::new(interpreted_cond.clone())) {
+                    self.with_exp(dothen).interpret_op(args)
+                } else {
+                    self.with_exp(doelse).interpret_op(args)
+                }
             },
             _ => {
                 Err(RunFailure::RunErr(srcloc, format!("Don't know how to interpret {}", translated_expr.to_sexp(self, &Vec::new(), true).to_string())))
@@ -1101,4 +1119,25 @@ fn try_interp_simple_sha256_and_sub_with_fun_arg_swap_diff_args() {
         FuzzOperation::Quote(SExp::Integer(loc.clone(), 19_u32.to_bigint().unwrap()))
     );
     assert_eq!(Ok(result), prog.interpret_op(&args));
+}
+
+#[test]
+fn try_interp_simple_if_1() {
+    let loc = Srcloc::start(&"*test*".to_string());
+    let num = |x: i32| FuzzOperation::Quote(SExp::Integer(loc.clone(), x.to_bigint().unwrap()));
+
+    let prog = FuzzProgram {
+        args: ArgListType::ProperList(3),
+        functions: Vec::new(),
+        body: FuzzOperation::If(
+            Rc::new(FuzzOperation::Argref(0)),
+            Rc::new(FuzzOperation::Argref(1)),
+            Rc::new(FuzzOperation::Argref(2))
+        )
+    };
+    let args_false = vec!(num(0), num(23), num(19));
+    let args_true = vec!(num(1), num(23), num(19));
+
+    assert_eq!(Ok(num(19)), prog.interpret_op(&args_false));
+    assert_eq!(Ok(num(23)), prog.interpret_op(&args_true));
 }
