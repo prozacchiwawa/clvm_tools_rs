@@ -956,3 +956,102 @@ fn try_interp_simple_sha256() {
     );
     assert_eq!(Ok(result), prog.interpret_op(&args));
 }
+
+#[test]
+fn try_interp_simple_sha256_and_sub() {
+    let loc = Srcloc::start(&"*test*".to_string());
+    let result = FuzzOperation::Quote(SExp::Atom(loc.clone(), vec!(
+        0x98, 0x72, 0x2e, 0x2e, 0xbe, 0xd8, 0xed, 0x3d,
+        0x36, 0x52, 0xe1, 0x1e, 0x41, 0x81, 0xf0, 0xdc,
+        0xcc, 0x1c, 0xe7, 0xd1, 0x92, 0xd8, 0xf1, 0xdb,
+        0x37, 0x0a, 0xf8, 0xec, 0x4a, 0x4e, 0x17, 0x4a,
+    )));
+    let prog = FuzzProgram {
+        args: ArgListType::ProperList(2),
+        functions: Vec::new(),
+        body: FuzzOperation::Sha256(vec!(FuzzOperation::Sub(Rc::new(FuzzOperation::Argref(0)), Rc::new(FuzzOperation::Argref(1)))))
+    };
+    let args = vec!(
+        FuzzOperation::Quote(SExp::Integer(loc.clone(), 19_u32.to_bigint().unwrap())),
+        FuzzOperation::Quote(SExp::Integer(loc.clone(), 23_u32.to_bigint().unwrap()))
+    );
+    assert_eq!(Ok(result), prog.interpret_op(&args));
+}
+
+#[test]
+fn try_interp_simple_sha256_and_sub_with_fun() {
+    let loc = Srcloc::start(&"*test*".to_string());
+    let result = FuzzOperation::Quote(SExp::Atom(loc.clone(), vec!(
+        0x98, 0x72, 0x2e, 0x2e, 0xbe, 0xd8, 0xed, 0x3d,
+        0x36, 0x52, 0xe1, 0x1e, 0x41, 0x81, 0xf0, 0xdc,
+        0xcc, 0x1c, 0xe7, 0xd1, 0x92, 0xd8, 0xf1, 0xdb,
+        0x37, 0x0a, 0xf8, 0xec, 0x4a, 0x4e, 0x17, 0x4a,
+    )));
+    let prog = FuzzProgram {
+        args: ArgListType::ProperList(2),
+        functions: vec!(FuzzFunction {
+            inline: false,
+            number: 0,
+            args: ArgListType::ProperList(2),
+            body: FuzzOperation::Sub(Rc::new(FuzzOperation::Argref(0)), Rc::new(FuzzOperation::Argref(1)))
+        }),
+        body: FuzzOperation::Sha256(vec!(FuzzOperation::Call(0, vec!(FuzzOperation::Argref(0), FuzzOperation::Argref(1)))))
+    };
+    let args = vec!(
+        FuzzOperation::Quote(SExp::Integer(loc.clone(), 19_u32.to_bigint().unwrap())),
+        FuzzOperation::Quote(SExp::Integer(loc.clone(), 23_u32.to_bigint().unwrap()))
+    );
+    assert_eq!(Ok(result), prog.interpret_op(&args));
+}
+
+#[test]
+fn try_interp_simple_sha256_and_sub_with_fun_arg_swap_1() {
+    let loc = Srcloc::start(&"*test*".to_string());
+    let result = FuzzOperation::Quote(SExp::Atom(loc.clone(), vec!(
+        0x98, 0x72, 0x2e, 0x2e, 0xbe, 0xd8, 0xed, 0x3d,
+        0x36, 0x52, 0xe1, 0x1e, 0x41, 0x81, 0xf0, 0xdc,
+        0xcc, 0x1c, 0xe7, 0xd1, 0x92, 0xd8, 0xf1, 0xdb,
+        0x37, 0x0a, 0xf8, 0xec, 0x4a, 0x4e, 0x17, 0x4a,
+    )));
+    let prog = FuzzProgram {
+        args: ArgListType::ProperList(2),
+        functions: vec!(FuzzFunction {
+            inline: false,
+            number: 0,
+            args: ArgListType::ProperList(2),
+            body: FuzzOperation::Sub(Rc::new(FuzzOperation::Argref(0)), Rc::new(FuzzOperation::Argref(1)))
+        }),
+        body: FuzzOperation::Sha256(vec!(FuzzOperation::Call(0, vec!(FuzzOperation::Argref(1), FuzzOperation::Argref(0)))))
+    };
+    let args = vec!(
+        FuzzOperation::Quote(SExp::Integer(loc.clone(), 23_u32.to_bigint().unwrap())),
+        FuzzOperation::Quote(SExp::Integer(loc.clone(), 19_u32.to_bigint().unwrap()))
+    );
+    assert_eq!(Ok(result), prog.interpret_op(&args));
+}
+
+#[test]
+fn try_interp_simple_sha256_and_sub_with_fun_arg_swap_2() {
+    let loc = Srcloc::start(&"*test*".to_string());
+    let result = FuzzOperation::Quote(SExp::Atom(loc.clone(), vec!(
+        0x98, 0x72, 0x2e, 0x2e, 0xbe, 0xd8, 0xed, 0x3d,
+        0x36, 0x52, 0xe1, 0x1e, 0x41, 0x81, 0xf0, 0xdc,
+        0xcc, 0x1c, 0xe7, 0xd1, 0x92, 0xd8, 0xf1, 0xdb,
+        0x37, 0x0a, 0xf8, 0xec, 0x4a, 0x4e, 0x17, 0x4a,
+    )));
+    let prog = FuzzProgram {
+        args: ArgListType::ProperList(2),
+        functions: vec!(FuzzFunction {
+            inline: false,
+            number: 0,
+            args: ArgListType::ProperList(2),
+            body: FuzzOperation::Sub(Rc::new(FuzzOperation::Argref(1)), Rc::new(FuzzOperation::Argref(0)))
+        }),
+        body: FuzzOperation::Sha256(vec!(FuzzOperation::Call(0, vec!(FuzzOperation::Argref(0), FuzzOperation::Argref(1)))))
+    };
+    let args = vec!(
+        FuzzOperation::Quote(SExp::Integer(loc.clone(), 23_u32.to_bigint().unwrap())),
+        FuzzOperation::Quote(SExp::Integer(loc.clone(), 19_u32.to_bigint().unwrap()))
+    );
+    assert_eq!(Ok(result), prog.interpret_op(&args));
+}
