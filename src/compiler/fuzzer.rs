@@ -171,6 +171,7 @@ fn make_operator(op: String, args: Vec<SExp>) -> SExp {
 }
 
 fn distribute_args(a: ArgListType, fun: &FuzzProgram, bindings: &Vec<Vec<FuzzOperation>>, arginputs: &Vec<FuzzOperation>, argn: u8, spine: bool) -> (u8, SExp) {
+    println!("[{} ({})] distribute_args {} inputs {:?}", argn, spine, a.to_sexp().to_string(), arginputs);
     let loc = Srcloc::start(&"*rng*".to_string());
     match a {
         ArgListType::ProperList(0) => (argn, SExp::Nil(loc.clone())),
@@ -199,36 +200,47 @@ fn distribute_args(a: ArgListType, fun: &FuzzProgram, bindings: &Vec<Vec<FuzzOpe
         },
         ArgListType::Structure(SExp::Nil(l)) => (argn, SExp::Nil(l.clone())),
         ArgListType::Structure(SExp::Cons(l,a,b)) => {
-            let a_borrow: &SExp = a.borrow();
-            let b_borrow: &SExp = b.borrow();
-            let first_res =
-                distribute_args(
-                    ArgListType::Structure(a_borrow.clone()),
-                    fun,
-                    bindings,
-                    arginputs,
-                    argn,
-                    false
-                );
-            let rest_res =
-                distribute_args(
-                    ArgListType::Structure(b_borrow.clone()),
-                    fun,
-                    bindings,
-                    arginputs,
-                    argn + first_res.0,
-                    spine
-                );
-            (
-                rest_res.0,
-                if spine {
-                    SExp::Cons(l.clone(), Rc::new(first_res.1), Rc::new(rest_res.1))
-                } else {
-                    make_operator(
-                        "c".to_string(), vec!(first_res.1, rest_res.1)
+            if spine {
+                let a_borrow: &SExp = a.borrow();
+                let b_borrow: &SExp = b.borrow();
+                let first_res =
+                    distribute_args(
+                        ArgListType::Structure(a_borrow.clone()),
+                        fun,
+                        bindings,
+                        arginputs,
+                        argn,
+                        false
+                    );
+                let rest_res =
+                    distribute_args(
+                        ArgListType::Structure(b_borrow.clone()),
+                        fun,
+                        bindings,
+                        arginputs,
+                        argn + first_res.0,
+                        spine
+                    );
+                (
+                    rest_res.0,
+                    if spine {
+                        SExp::Cons(l.clone(), Rc::new(first_res.1), Rc::new(rest_res.1))
+                    } else {
+                        make_operator(
+                            "c".to_string(), vec!(first_res.1, rest_res.1)
+                        )
+                    }
+                )
+            } else {
+                (
+                    argn + 1_u8,
+                    arginputs[argn as usize].to_sexp(
+                        fun,
+                        bindings,
+                        false
                     )
-                }
-            )
+                )
+            }
         },
         ArgListType::Structure(_) => {
             (
@@ -236,7 +248,7 @@ fn distribute_args(a: ArgListType, fun: &FuzzProgram, bindings: &Vec<Vec<FuzzOpe
                 arginputs[argn as usize].to_sexp(
                     fun,
                     bindings,
-                    true
+                    false
                 )
             )
         }
@@ -1168,4 +1180,52 @@ fn try_destructured_args_1() {
     )));
 
     assert_eq!(Ok(result), prog.interpret_op(&interp_args));
+}
+
+#[test]
+fn try_destructured_args_2() {
+    let loc = Srcloc::start(&"*test*".to_string());
+
+    let prog = FuzzProgram {
+        args: ArgListType::ProperList(0),
+        functions: vec!(FuzzFunction {
+            inline: false,
+            number: 0,
+            args: ArgListType::Structure(SExp::Cons(
+                loc.clone(),
+                Rc::new(SExp::atom_from_string(loc.clone(), &"a1".to_string())),
+                Rc::new(SExp::Cons(
+                    loc.clone(),
+                    Rc::new(SExp::Cons(
+                        loc.clone(),
+                        Rc::new(SExp::atom_from_string(loc.clone(), &"b1".to_string())),
+                        Rc::new(SExp::atom_from_string(loc.clone(), &"b2".to_string()))
+                    )),
+                    Rc::new(SExp::Nil(loc.clone()))
+                ))
+            )),
+            body: FuzzOperation::Sha256(vec!(
+                FuzzOperation::Argref(0),
+                FuzzOperation::Argref(1),
+                FuzzOperation::Argref(2))
+            )
+        }),
+        body: FuzzOperation::Call(0, vec!(
+            fuzz_num(1234),
+            FuzzOperation::Quote(SExp::Cons(
+                loc.clone(),
+                Rc::new(SExp::Integer(loc.clone(), 5678_i32.to_bigint().unwrap())),
+                Rc::new(SExp::Integer(loc.clone(), 9101112_i32.to_bigint().unwrap()))
+            ))
+        ))
+    };
+
+    let result = FuzzOperation::Quote(SExp::Atom(loc.clone(), vec!(
+        0xfa, 0x4e, 0x77, 0x0a, 0xa0, 0x40, 0xd7, 0x2c,
+        0xc0, 0x83, 0x3c, 0x81, 0x26, 0x9b, 0xf2, 0x68,
+        0x86, 0x77, 0x8c, 0xd9, 0x65, 0xc3, 0x62, 0x3a,
+        0x93, 0xfa, 0x5d, 0xa9, 0x49, 0x0b, 0x52, 0xfc,
+    )));
+
+    assert_eq!(Ok(result), prog.interpret_op(&Vec::new()));
 }
