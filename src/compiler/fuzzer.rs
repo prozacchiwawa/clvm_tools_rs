@@ -911,10 +911,11 @@ impl FuzzProgram {
 
         make_assignments(Rc::new(self.args.to_sexp()), Ok(prog_args_sexp), &mut assignment_map);
         let translated_expr = replace_args(self, &assignment_map, &Vec::new())?;
-        println!("translated_expr: {}", translated_expr.to_sexp(self, &Vec::new(), true).to_string());
         match &translated_expr {
             FuzzOperation::Quote(x) => {
-                println!("Got quote {}", x.to_string());
+                Ok(translated_expr.clone())
+            },
+            FuzzOperation::Argref(n) => {
                 Ok(translated_expr.clone())
             },
             FuzzOperation::Call(n,call_args) => {
@@ -1288,6 +1289,47 @@ fn try_destructured_args_3() {
             FuzzOperation::Argref(0),
             FuzzOperation::Let(vec!(FuzzOperation::Argref(0)), Rc::new(FuzzOperation::Argref(1))),
             FuzzOperation::Argref(0),
+            FuzzOperation::Argref(0)
+        ))
+    };
+
+    let test_num_rc = parse_sexp(loc.clone(), &"6682899131939974478".to_string()).unwrap()[0].clone();
+    let test_num: &SExp = test_num_rc.borrow();
+    let fuzz_num = FuzzOperation::Quote(test_num.clone());
+    let args = ArgInputs::Atom(fuzz_num.clone());
+    assert_eq!(Ok(fuzz_num), prog.interpret_op(&args));
+}
+
+#[test]
+// prog: (mod (arg_1 arg_2 arg_3) (defun fun_0 (arg_1 arg_2 arg_3 arg_4) arg_1) (defun fun_1 (arg_1 arg_2) (let ((binding_0 arg_1) (binding_1 (fun_0 arg_1 arg_1 arg_2 arg_1))) arg_1)) (fun_1 arg_2 arg_1))
+// args: (13273757822536036852 9596802442939969692 15117014685944027436)
+// interp: 7054631168731348389818101230617202786158531153912345511072451660194446889971
+// result: 9596802442939969692
+fn test_mismatch_1() {
+    let loc = Srcloc::start(&"*test*".to_string());
+    let prog = FuzzProgram {
+        args: ArgListType::ProperList(3),
+        functions: vec!(FuzzFunction {
+            inline: false,
+            number: 0,
+            args: ArgListType::ProperList(4),
+            body: FuzzOperation::Argref(0),
+        }, FuzzFunction {
+            inline: false,
+            number: 1,
+            args: ArgListType::ProperList(2),
+            body: FuzzOperation::Let(vec!(
+                FuzzOperation::Call(0, vec!(
+                    FuzzOperation::Argref(0),
+                    FuzzOperation::Argref(0),
+                    FuzzOperation::Argref(1),
+                    FuzzOperation::Argref(0)
+                )),
+                FuzzOperation::Argref(0)
+            ))
+        }),
+        body: FuzzOperation::Call(1, vec!(
+            FuzzOperation::Argref(1),
             FuzzOperation::Argref(0)
         ))
     };
