@@ -171,7 +171,6 @@ fn make_operator(op: String, args: Vec<SExp>) -> SExp {
 }
 
 fn distribute_args(a: ArgListType, fun: &FuzzProgram, bindings: &Vec<Vec<FuzzOperation>>, arginputs: &Vec<FuzzOperation>, argn: u8, spine: bool) -> (u8, SExp) {
-    println!("[{} ({})] distribute_args {} inputs {:?}", argn, spine, a.to_sexp().to_string(), arginputs);
     let loc = Srcloc::start(&"*rng*".to_string());
     match a {
         ArgListType::ProperList(0) => (argn, SExp::Nil(loc.clone())),
@@ -874,7 +873,10 @@ impl FuzzProgram {
         let translated_expr = replace_args(self, &assignment_map, &Vec::new())?;
         println!("translated_expr: {}", translated_expr.to_sexp(self, &Vec::new(), true).to_string());
         match &translated_expr {
-            FuzzOperation::Quote(x) => Ok(translated_expr.clone()),
+            FuzzOperation::Quote(x) => {
+                println!("Got quote {}", x.to_string());
+                Ok(translated_expr.clone())
+            },
             FuzzOperation::Call(n,call_args) => {
                 let mut interpreted_args = Vec::new();
                 for a in call_args.iter() {
@@ -927,7 +929,7 @@ impl FuzzProgram {
                 }
             },
             _ => {
-                Err(RunFailure::RunErr(srcloc, format!("Don't know how to interpret {}", translated_expr.to_sexp(self, &Vec::new(), true).to_string())))
+                Err(RunFailure::RunErr(srcloc, format!("Don't know how to interpret {} {:?}", translated_expr.to_sexp(self, &Vec::new(), true).to_string(), translated_expr)))
             }
         }
     }
