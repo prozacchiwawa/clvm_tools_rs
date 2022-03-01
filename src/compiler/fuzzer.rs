@@ -1272,6 +1272,7 @@ fn try_destructured_args_2() {
 #[test]
 // prog: (mod m (defun-inline fun_0 (arg_1 arg_2 arg_3 arg_4 arg_5) arg_3) (fun_0 m m (let ((binding_0 m)) binding_0) m m))
 // args: 6682899131939974478
+// => 6682899131939974478
 fn try_destructured_args_3() {
     let loc = Srcloc::start(&"*test*".to_string());
     let prog = FuzzProgram {
@@ -1297,4 +1298,3 @@ fn try_destructured_args_3() {
     let args = ArgInputs::Atom(fuzz_num.clone());
     assert_eq!(Ok(fuzz_num), prog.interpret_op(&args));
 }
-
