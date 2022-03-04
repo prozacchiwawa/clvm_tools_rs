@@ -20,12 +20,6 @@ use crate::compiler::runtypes::RunFailure;
 use crate::compiler::sexp::{SExp, parse_sexp};
 use crate::compiler::srcloc::Srcloc;
 
-lazy_static! {
-    pub static ref gen_ctr: AtomicUsize = {
-        return AtomicUsize::new(0);
-    };
-}
-
 // We don't actually need all operators here, just a good selection with
 // semantics that are distinguishable.
 #[derive(Debug, Clone)]
@@ -38,12 +32,6 @@ pub enum FuzzOperation {
     Sha256(Vec<FuzzOperation>),
     Let(Vec<FuzzOperation>,Rc<FuzzOperation>),
     Call(u8,Vec<FuzzOperation>),
-}
-
-fn limit_to_n() {
-    if gen_ctr.fetch_add(1, Ordering::SeqCst) >= 100000 {
-        panic!("Generating too many cases, something is wrong");
-    }
 }
 
 fn fuzz_num(x: i32) -> FuzzOperation {
@@ -140,23 +128,28 @@ fn atom_list(sexp: &SExp) -> Vec<String> {
     }
 }
 
-fn select_argument(num_: u8, fun: &FuzzProgram, bindings: &Vec<Vec<FuzzOperation>>) -> (String, FuzzOperation) {
+fn select_argument(num_: u8, fun: &FuzzProgram, bindings: &Vec<Vec<FuzzOperation>>) -> Option<(String, FuzzOperation)> {
     let mut num = num_;
-    let args = atom_list(&fun.args.to_sexp());
+    let args_sexp = fun.args.to_sexp();
+    let args = atom_list(&args_sexp);
+
+    if args.len() == 0 && bindings.len() == 0 {
+        return None;
+    }
 
     loop {
         if (num < args.len() as u8) {
-            return (args[num as usize].clone(), FuzzOperation::Argref(num));
+            return Some((args[num as usize].clone(), FuzzOperation::Argref(num)));
         }
 
         num -= args.len() as u8;
         let mut binding_count = 0;
         for b_list in bindings {
             if num < b_list.len() as u8 {
-                return (
+                return Some((
                     format!("binding_{}", binding_count + num),
                     b_list[num as usize].clone()
-                );
+                ));
             }
 
             num -= b_list.len() as u8;
@@ -232,7 +225,6 @@ fn distribute_args(a: &ArgListType, fun: &FuzzProgram, bindings: &Vec<Vec<FuzzOp
                     convert,
                     argn,
                 );
-            println!("{}: first_res {} -> {}", argn, first_res.1.to_string(), first_res.0);
             let rest_res =
                 distribute_args(
                     &ArgListType::Structure(b_borrow.clone()),
@@ -242,7 +234,6 @@ fn distribute_args(a: &ArgListType, fun: &FuzzProgram, bindings: &Vec<Vec<FuzzOp
                     convert,
                     first_res.0,
                 );
-            println!("{}: rest_res {} -> {}", argn, rest_res.1.to_string(), rest_res.0);
             (
                 rest_res.0,
                 SExp::Cons(l.clone(), Rc::new(first_res.1), Rc::new(rest_res.1))
@@ -295,10 +286,11 @@ impl FuzzOperation {
         match self {
             FuzzOperation::Argref(n) => {
                 let argument_num = random_u8();
-                let argument = select_argument(
+                select_argument(
                     argument_num, fun, bindings
-                );
-                SExp::atom_from_string(loc.clone(), &argument.0)
+                ).map(|argument| {
+                    SExp::atom_from_string(loc.clone(), &argument.0)
+                }).unwrap_or_else(|| SExp::Nil(loc.clone()))
             },
             FuzzOperation::Quote(s) => {
                 if quotes {
@@ -432,8 +424,6 @@ fn make_random_call<R: Rng + ?Sized>(rng: &mut R, depth: u8) -> FuzzOperation {
 // FuzzOperation is potentially infinite so we'll limit the depth to something
 // sensible.
 fn random_operation<R: Rng + ?Sized>(rng: &mut R, depth: u8, must_call: bool) -> FuzzOperation {
-    limit_to_n();
-
     if (depth >= MAX_DEPTH) {
         return FuzzOperation::Argref(random_u8());
     }
@@ -643,6 +633,7 @@ impl Distribution<FuzzProgram> for Standard {
             fcopy.number = i as u8;
             fcopy
         }).collect();
+
         FuzzProgram {
             args: random(),
             functions: funs,
@@ -684,8 +675,10 @@ fn replace_args(prog: &FuzzProgram, args: &HashMap<Vec<u8>, Result<FuzzOperation
     match &prog.body {
         FuzzOperation::Argref(n) => {
             let argres = select_argument(*n, prog, bindings);
-            let name_u8 = argres.0.as_bytes().to_vec();
-            match args.get(&name_u8) {
+            match argres.and_then(|argres| {
+                let name_u8 = argres.0.as_bytes().to_vec();
+                args.get(&name_u8)
+            }) {
                 Some(v) => v.clone(),
                 None => Ok(prog.body.clone())
             }
@@ -758,7 +751,6 @@ fn replace_args(prog: &FuzzProgram, args: &HashMap<Vec<u8>, Result<FuzzOperation
 }
 
 fn reify_args(prog: &FuzzProgram, args: Rc<SExp>, spine: bool) -> Result<SExp, RunFailure> {
-    println!("args {} spine {}", args.to_string(), spine);
     match args.borrow() {
         SExp::Cons(l,h,t) => {
             if spine {
@@ -770,7 +762,6 @@ fn reify_args(prog: &FuzzProgram, args: Rc<SExp>, spine: bool) -> Result<SExp, R
                 let h_string = h.to_string();
                 if h_string == "q" || h_string.as_bytes().to_vec() == vec!(1) {
                     let t_borrow: &SExp = t.borrow();
-                    println!("quoted {}", t_borrow.to_string());
                     Ok(t_borrow.clone())
                 } else if h_string == "c" {
                     let tail = reify_args(prog, t.clone(), false)?;
@@ -906,7 +897,6 @@ impl FuzzProgram {
                 let function = self.select_function(*n);
                 let use_args = distribute_args(&function.args, &function.to_program(self), bindings, &call_args, &|arg| {
                     let arg_prog = self.with_exp(&arg);
-                    println!("arg: {}", arg_prog.to_sexp().to_string());
                     arg_prog.interpret_op(args, bindings).unwrap_or_else(|_| arg.clone())
                 }, 0);
                 let prog = FuzzProgram {
@@ -914,7 +904,6 @@ impl FuzzProgram {
                     functions: self.functions.clone(),
                     body: function.body.clone()
                 }.interpret_op(&ArgInputs::Atom(FuzzOperation::Quote(use_args.1.clone())), &Vec::new())?;
-                println!("call: interpret_op {}", prog.to_sexp(self, bindings, true).to_string());
                 Ok(prog)
             },
             FuzzOperation::Sub(a,b) => {
@@ -1282,4 +1271,26 @@ fn try_destructured_args_3() {
     let fuzz_num = FuzzOperation::Quote(test_num.clone());
     let args = ArgInputs::Atom(fuzz_num.clone());
     assert_eq!(Ok(fuzz_num), prog.interpret_op(&args, &Vec::new()));
+}
+
+#[test]
+// prog: (mod ((xqklt . kgbuh) ucmpp) (defun-inline fun_0 d d) (defun-inline fun_1 (ewx) ()) (fun_0 . kgbuh))
+// args: ((18217002759553471604 . 13467100040528850420) 12323142721191631467 . 14885696725822030681)
+// want result: ()
+fn named_args_1() {
+    let loc = Srcloc::start(&"*test*".to_string());
+    let fuzz_nil = FuzzOperation::Quote(SExp::Nil(loc.clone()));
+    let parsed_arg_structure = parse_sexp(loc.clone(), &"((xqklt . kgbuh) ucmpp)".to_string()).unwrap()[0].clone();
+    let arg_structure: &SExp = parsed_arg_structure.borrow();
+    let prog = FuzzProgram {
+        args: ArgListType::Structure(arg_structure.clone()),
+        functions: Vec::new(),
+        body: FuzzOperation::Call(0, vec!(FuzzOperation::Argref(0)))
+    };
+    let parsed_input_args = parse_sexp(loc.clone(), &"((18217002759553471604 . 13467100040528850420) 12323142721191631467 . 14885696725822030681)".to_string()).unwrap()[0].clone();
+    let input_args: &SExp = parsed_input_args.borrow();
+    let parsed_result_number = parse_sexp(loc.clone(), &"18217002759553471604".to_string()).unwrap()[0].clone();
+    let result_number: &SExp = parsed_result_number.borrow();
+
+    assert_eq!(Ok(FuzzOperation::Quote(result_number.clone())), prog.interpret_op(&ArgInputs::Atom(FuzzOperation::Quote(input_args.clone())), &Vec::new()));
 }

@@ -6,6 +6,8 @@ use std::borrow::Borrow;
 use std::hash::{Hash, Hasher};
 use std::rc::Rc;
 use std::string::String;
+use std::sync::atomic::AtomicUsize;
+use std::sync::atomic::Ordering;
 
 use num_bigint::ToBigInt;
 use num_traits::{zero, Num};
@@ -29,6 +31,7 @@ const MAX_DEPTH : u8 = 2;
 
 fn random_sexp<R: Rng + ?Sized>(rng: &mut R, depth: u8) -> SExp {
     let selection = rng.gen_range(0..=1);
+
     if selection == 0 || depth >= MAX_DEPTH {
         SExp::random_atom()
     } else {
