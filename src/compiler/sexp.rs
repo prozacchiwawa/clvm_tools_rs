@@ -33,7 +33,7 @@ fn random_sexp<R: Rng + ?Sized>(rng: &mut R, depth: u8) -> SExp {
     let selection = rng.gen_range(0..=1);
 
     if selection == 0 || depth >= MAX_DEPTH {
-        SExp::random_atom()
+        SExp::random_atom(rng)
     } else {
         let a: SExp = random_sexp(rng, depth + 1);
         let b: SExp = random_sexp(rng, depth + 1);
@@ -411,11 +411,11 @@ impl SExp {
         }
     }
 
-    pub fn random_atom() -> SExp {
+    pub fn random_atom<R: Rng + ?Sized>(rng: &mut R) -> SExp {
         let mut bytevec: Vec<u8> = Vec::new();
         let mut len = 0;
         loop {
-            let mut n: u8 = random();
+            let mut n: u8 = rng.gen();
             n %= 40;
             len += 1;
             if n < 26 && len < 6 {
