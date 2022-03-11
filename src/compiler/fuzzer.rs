@@ -20,6 +20,9 @@ use crate::compiler::runtypes::RunFailure;
 use crate::compiler::sexp::{SExp, parse_sexp};
 use crate::compiler::srcloc::Srcloc;
 
+use rand::SeedableRng;
+use rand::rngs::SmallRng;
+
 // We don't actually need all operators here, just a good selection with
 // semantics that are distinguishable.
 #[derive(Debug, Clone)]
@@ -1305,4 +1308,13 @@ fn test_simple_prog_with_wrong_answer() {
         body: FuzzOperation::Argref(0)
     };
     assert_eq!(Ok(a), prog.interpret_op(&input_args, &Vec::new()));
+}
+
+pub fn rng_from_string(v: String) -> SmallRng {
+    let mut init_vec: [u8; 32] = Default::default();
+    let init_bytes = v.as_bytes();
+    for i in 0..32 {
+        init_vec[i] = init_bytes[i%init_bytes.len()];
+    }
+    SmallRng::from_seed(init_vec)
 }
