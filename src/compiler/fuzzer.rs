@@ -510,11 +510,28 @@ impl Distribution<FuzzOperation> for Standard {
     }
 }
 
+fn random_arg_structure<R: Rng + ?Sized>(rng: &mut R, spine: bool) -> SExp {
+    let loc = Srcloc::start(&"*rng*".to_string());
+    if spine {
+        if rng.gen_range(0..=1) > 0 {
+            SExp::Cons(
+                loc,
+                Rc::new(random_arg_structure(rng, false)),
+                Rc::new(random_arg_structure(rng, spine))
+            )
+        } else {
+            SExp::Nil(loc)
+        }
+    } else {
+        rng.gen()
+    }
+}
+
 impl Distribution<ArgListType> for Standard {
     fn sample<R: Rng + ?Sized>(&self, rng: &mut R) -> ArgListType {
         match rng.gen_range(0..=1) {
             0 => ArgListType::ProperList(rng.gen_range(0..=5)),
-            _ => ArgListType::Structure(rng.gen())
+            _ => ArgListType::Structure(random_arg_structure(rng, true))
         }
     }
 }
@@ -762,35 +779,6 @@ fn replace_args(prog: &FuzzProgram, args: &HashMap<Vec<u8>, Result<FuzzOperation
     }
 }
 
-fn reify_args(prog: &FuzzProgram, args: Rc<SExp>, spine: bool) -> Result<SExp, RunFailure> {
-    match args.borrow() {
-        SExp::Cons(l,h,t) => {
-            if spine {
-                let tail = reify_args(prog, t.clone(), spine)?;
-                let head = reify_args(prog, h.clone(), false)?;
-                Ok(SExp::Cons(l.clone(), Rc::new(head.clone()), Rc::new(tail.clone())))
-            } else {
-                // XXX do a less crappy job
-                let h_string = h.to_string();
-                if h_string == "q" || h_string.as_bytes().to_vec() == vec!(1) {
-                    let t_borrow: &SExp = t.borrow();
-                    Ok(t_borrow.clone())
-                } else if h_string == "c" {
-                    let tail = reify_args(prog, t.clone(), false)?;
-                    let head = reify_args(prog, h.clone(), false)?;
-                    Ok(SExp::Cons(l.clone(), Rc::new(head.clone()), Rc::new(tail.clone())))
-                } else {
-                    prog.interpret(args.clone())
-                }
-            }
-        },
-        _ => {
-            let borrowed: &SExp = args.borrow();
-            Ok(borrowed.clone())
-        }
-    }
-}
-
 fn do_subtract(prog: &FuzzProgram, a: &FuzzOperation, b: &FuzzOperation) -> Result<FuzzOperation, RunFailure> {
     let loc = Srcloc::start(&"*err*".to_string());
     match (a, b) {
@@ -982,6 +970,15 @@ impl FuzzProgram {
         let result = self.interpret_op(&arginputs, &Vec::new())?;
         Ok(result.to_sexp(self, &Vec::new(), true))
     }
+}
+
+pub fn rng_from_string(v: String) -> SmallRng {
+    let mut init_vec: [u8; 32] = Default::default();
+    let init_bytes = v.as_bytes();
+    for i in 0..32 {
+        init_vec[i] = init_bytes[i%init_bytes.len()];
+    }
+    SmallRng::from_seed(init_vec)
 }
 
 #[test]
@@ -1283,38 +1280,4 @@ fn try_destructured_args_3() {
     let fuzz_num = FuzzOperation::Quote(test_num.clone());
     let args = ArgInputs::Atom(fuzz_num.clone());
     assert_eq!(Ok(fuzz_num), prog.interpret_op(&args, &Vec::new()));
-}
-
-#[test]
-// prog: (mod (arg_1 arg_2) (defun fun_0 (arg_1) arg_1) (fun_0 arg_1))
-// compiled: (2 (1 2 2 (4 2 (4 5 ()))) (4 (1 2 (1 . 5) 1) 1))
-// args: (3559513844396764218 4599117219095299548)
-// interp-ok: (q . 4599117219095299548)
-// result: 3559513844396764218
-fn test_simple_prog_with_wrong_answer() {
-    let a = fuzz_bignum("3559513844396764218");
-    let b = fuzz_bignum("4599117219095299548");
-    let input_args = ArgInputs::List(vec!(a.clone(), b.clone()));
-    let prog = FuzzProgram {
-        args: ArgListType::ProperList(2),
-        functions: vec!(
-            FuzzFunction {
-                inline: false,
-                number: 0,
-                args: ArgListType::ProperList(1),
-                body: FuzzOperation::Argref(0)
-            }
-        ),
-        body: FuzzOperation::Argref(0)
-    };
-    assert_eq!(Ok(a), prog.interpret_op(&input_args, &Vec::new()));
-}
-
-pub fn rng_from_string(v: String) -> SmallRng {
-    let mut init_vec: [u8; 32] = Default::default();
-    let init_bytes = v.as_bytes();
-    for i in 0..32 {
-        init_vec[i] = init_bytes[i%init_bytes.len()];
-    }
-    SmallRng::from_seed(init_vec)
 }
