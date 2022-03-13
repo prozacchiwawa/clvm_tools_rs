@@ -13,3 +13,4 @@ pub mod rename;
 pub mod runtypes;
 pub mod sexp;
 pub mod srcloc;
+pub mod symbols;

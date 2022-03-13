@@ -55,6 +55,7 @@ use crate::compiler::runtypes::RunFailure;
 use crate::compiler::sexp;
 use crate::compiler::sexp::parse_sexp;
 use crate::compiler::srcloc::Srcloc;
+use crate::compiler::symbols::SymbolStore;
 use crate::util::{collapse, Number};
 
 pub struct PathOrCodeConv {}
@@ -383,6 +384,12 @@ pub fn cldb(args: &Vec<String>) {
         Argument::new()
             .set_type(Rc::new(PathOrCodeConv {}))
             .set_help("path to symbol file".to_string()),
+    );
+    parser.add_argument(
+        vec!["-t".to_string(), "--stack-trace".to_string()],
+        Argument::new()
+            .set_action(TArgOptionAction::StoreTrue)
+            .set_help("stack trace".to_string()),
     );
     parser.add_argument(
         vec!["path_or_code".to_string()],
@@ -1128,8 +1135,14 @@ pub fn launch_tool(
             Ok(r) => {
                 print!("{}\n", r.to_string());
 
+                // Symbols
+                let symstore = SymbolStore::collect(r.clone());
                 let mut st = HashMap::new();
                 build_symbol_table_mut(&mut st, &r);
+                let symstore_map = symstore.to_stringmap();
+                for (name, val) in symstore_map.iter() {
+                    st.insert(name.clone(), val.clone());
+                }
                 write_sym_output(&st, &"main.sym".to_string());
             }
             Err(c) => {
