@@ -187,6 +187,17 @@ impl TConversion for OpcConversion {
     }
 }
 
+pub fn opc(args: &Vec<String>) {
+    let mut allocator = Allocator::new();
+    call_tool(
+        &mut allocator,
+        "opc".to_string(),
+        "Compile a clvm script.".to_string(),
+        Box::new(OpcConversion {}),
+        args,
+    );
+}
+
 pub struct OpdConversion {}
 
 impl TConversion for OpdConversion {
@@ -208,17 +219,6 @@ impl TConversion for OpdConversion {
     }
 }
 
-pub fn opc(args: &Vec<String>) {
-    let mut allocator = Allocator::new();
-    call_tool(
-        &mut allocator,
-        "opc".to_string(),
-        "Compile a clvm script.".to_string(),
-        Box::new(OpcConversion {}),
-        args,
-    );
-}
-
 pub fn opd(args: &Vec<String>) {
     let mut allocator = Allocator::new();
     call_tool(
@@ -226,6 +226,40 @@ pub fn opd(args: &Vec<String>) {
         "opd".to_string(),
         "Disassemble a compiled clvm script from hex.".to_string(),
         Box::new(OpdConversion {}),
+        args,
+    );
+}
+
+pub struct OptConversion {}
+
+impl TConversion for OptConversion {
+    fn invoke<'a>(
+        &self,
+        allocator: &'a mut Allocator,
+        hex_text: &String,
+    ) -> Result<Tuple<NodePtr, String>, String> {
+        let mut stream = Stream::new(Some(Bytes::new(Some(BytesFromType::Hex(
+            hex_text.to_string(),
+        )))));
+
+        return sexp_from_stream(allocator, &mut stream, Box::new(SimpleCreateCLVMObject {}))
+            .map_err(|e| e.1)
+            .and_then(|sexp| {
+                let runner = Rc::new(DefaultProgramRunner::new());
+                optimize_sexp(allocator, sexp.1, runner)
+                    .map(|r| t(r, disassemble(allocator, r)))
+                    .map_err(|e| e.1)
+            })
+    }
+}
+
+pub fn opt(args: &Vec<String>) {
+    let mut allocator = Allocator::new();
+    call_tool(
+        &mut allocator,
+        "opt".to_string(),
+        "Run the classic optimizer on a clvm program.".to_string(),
+        Box::new(OptConversion {}),
         args,
     );
 }

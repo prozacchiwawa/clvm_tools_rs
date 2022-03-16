@@ -54,6 +54,10 @@ name = "opc"
 path = "src/classic/bins/opc.rs"
 
 [[bin]]
+name = "opt"
+path = "src/classic/bins/opt.rs"
+
+[[bin]]
 name = "run"
 path = "src/classic/bins/run.rs"
 
