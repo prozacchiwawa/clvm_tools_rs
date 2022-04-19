@@ -65,7 +65,7 @@ pub fn detect_include_directive(allocator: &mut Allocator, sexp: NodePtr, name: 
         }
     }
 
-    return false;
+    false
 }
 
 // Improve this in case other include directives need detection here.

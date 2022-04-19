@@ -966,7 +966,7 @@ fn process_helper_let_bindings(
         }
     }
 
-    return result;
+    result
 }
 
 fn sort_by_content(program: &CompileForm) -> bool {
@@ -1142,7 +1142,7 @@ fn dummy_functions(compiler: &PrimaryCodegen) -> Result<PrimaryCodegen, CompileE
             HelperForm::Defun(_, name, false, _, _) => {
                 let mut c_copy = compiler.clone();
                 c_copy.parentfns.insert(name.clone());
-                return Ok(c_copy);
+                Ok(c_copy)
             }
             HelperForm::Defun(loc, name, true, args, body) => Ok(compiler)
                 .and_then(|comp| fail_if_present(loc.clone(), &compiler.inlines, &name, comp))
