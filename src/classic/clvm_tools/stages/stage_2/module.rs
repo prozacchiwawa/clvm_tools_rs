@@ -17,19 +17,18 @@ use crate::classic::clvm_tools::NodePath::NodePath;
 
 #[derive(Clone, Debug, PartialEq, Hash, Eq)]
 pub enum IncludeDirective {
-    TreeSortByHash
+    TreeSortByHash,
 }
 
 lazy_static! {
     pub static ref MAIN_NAME: String = {
         return "".to_string();
     };
-
     pub static ref KNOWN_INCLUDE_DIRECTIVES: HashMap<Vec<u8>, IncludeDirective> = {
         let mut hs = HashMap::new();
         hs.insert(
             "*tree-sort-by-content*".as_bytes().to_vec(),
-            IncludeDirective::TreeSortByHash
+            IncludeDirective::TreeSortByHash,
         );
         hs
     };
@@ -168,17 +167,18 @@ fn build_used_constants_names(
     }
 
     if directives.contains(&IncludeDirective::TreeSortByHash) {
-        let mut hash_and_name_list: Vec<HashAndName> =
-            used_name_list.iter().map(|name| {
-                let hash = functions.get(name).map(|body| {
-                    sha256tree(allocator, *body).data().clone()
-                }).unwrap_or_else(|| Vec::new()); // Non functions don't count.
+        let mut hash_and_name_list: Vec<HashAndName> = used_name_list
+            .iter()
+            .map(|name| {
+                let hash = functions
+                    .get(name)
+                    .map(|body| sha256tree(allocator, *body).data().clone())
+                    .unwrap_or_else(|| Vec::new()); // Non functions don't count.
                 HashAndName(hash, name.clone())
-            }).collect();
+            })
+            .collect();
         hash_and_name_list.sort();
-        used_name_list = hash_and_name_list.iter().map(|hn| {
-            hn.1.clone()
-        }).collect();
+        used_name_list = hash_and_name_list.iter().map(|hn| hn.1.clone()).collect();
     } else {
         used_name_list.sort();
     }
@@ -201,10 +201,10 @@ fn parse_include(
             match KNOWN_INCLUDE_DIRECTIVES.get(name_vec) {
                 Some(directive) => {
                     return Ok(Some(directive.clone()));
-                },
+                }
                 _ => {}
             }
-        },
+        }
         _ => {}
     }
 

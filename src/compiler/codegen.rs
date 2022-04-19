@@ -972,7 +972,9 @@ fn process_helper_let_bindings(
 fn sort_by_content(program: &CompileForm) -> bool {
     let want_name = "*tree-sort-by-content*".as_bytes().to_vec();
     for h in program.helpers.iter() {
-        if h.name() == want_name { return true; }
+        if h.name() == want_name {
+            return true;
+        }
     }
     false
 }
@@ -1000,7 +1002,7 @@ fn start_codegen(opts: Rc<dyn CompilerOpts>, comp: CompileForm) -> PrimaryCodege
                 .collect();
 
             if do_sort_by_content {
-                live_helpers.sort_by(|a,b| {
+                live_helpers.sort_by(|a, b| {
                     let arc = a.body().to_sexp();
                     let brc = b.body().to_sexp();
                     arc.cmp(brc.borrow())

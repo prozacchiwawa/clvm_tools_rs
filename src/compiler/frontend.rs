@@ -598,8 +598,8 @@ fn frontend_start(
 
 fn is_defconstant(h: &HelperForm) -> bool {
     match h {
-        HelperForm::Defconstant(_,_,_) => true,
-        _ => false
+        HelperForm::Defconstant(_, _, _) => true,
+        _ => false,
     }
 }
 

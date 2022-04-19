@@ -125,7 +125,8 @@ fn run_sort_by_name() {
             "(mod (Z) (defun B (X) (+ X 1)) (defun A (X) (* X 2)) (A (B Z)))".to_string()
         ))
         .trim(),
-        "(a (q 2 4 (c 2 (c (a 6 (c 2 (c 5 ()))) ()))) (c (q (* 5 (q . 2)) 16 5 (q . 1)) 1))".to_string()
+        "(a (q 2 4 (c 2 (c (a 6 (c 2 (c 5 ()))) ()))) (c (q (* 5 (q . 2)) 16 5 (q . 1)) 1))"
+            .to_string()
     );
     assert_eq!(
         do_basic_run(&vec!(

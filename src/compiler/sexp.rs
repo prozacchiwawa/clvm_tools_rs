@@ -64,34 +64,34 @@ impl PartialOrd for SExp {
         match (self, other) {
             (SExp::Nil(_), _) => Some(Ordering::Less),
             (_, SExp::Nil(_)) => Some(Ordering::Greater),
-            (SExp::Atom(_,_), SExp::Cons(_,_,_)) => Some(Ordering::Less),
-            (SExp::Integer(_,_), SExp::Cons(_,_,_)) => Some(Ordering::Less),
-            (SExp::QuotedString(_,_,_), SExp::Cons(_,_,_)) => Some(Ordering::Less),
-            (SExp::Cons(_,_,_), SExp::Atom(_,_)) => Some(Ordering::Greater),
-            (SExp::Cons(_,_,_), SExp::Integer(_,_)) => Some(Ordering::Greater),
-            (SExp::Cons(_,_,_), SExp::QuotedString(_,_,_)) => Some(Ordering::Greater),
-            (SExp::Cons(_,a,b), SExp::Cons(_,c,d)) => {
-                match a.partial_cmp(c) {
-                    Some(Ordering::Greater) => Some(Ordering::Greater),
-                    Some(Ordering::Less) => Some(Ordering::Less),
-                    _ => b.partial_cmp(d)
-                }
+            (SExp::Atom(_, _), SExp::Cons(_, _, _)) => Some(Ordering::Less),
+            (SExp::Integer(_, _), SExp::Cons(_, _, _)) => Some(Ordering::Less),
+            (SExp::QuotedString(_, _, _), SExp::Cons(_, _, _)) => Some(Ordering::Less),
+            (SExp::Cons(_, _, _), SExp::Atom(_, _)) => Some(Ordering::Greater),
+            (SExp::Cons(_, _, _), SExp::Integer(_, _)) => Some(Ordering::Greater),
+            (SExp::Cons(_, _, _), SExp::QuotedString(_, _, _)) => Some(Ordering::Greater),
+            (SExp::Cons(_, a, b), SExp::Cons(_, c, d)) => match a.partial_cmp(c) {
+                Some(Ordering::Greater) => Some(Ordering::Greater),
+                Some(Ordering::Less) => Some(Ordering::Less),
+                _ => b.partial_cmp(d),
             },
-            (SExp::Integer(_,a), SExp::Integer(_,b)) => {
-                a.partial_cmp(b)
-            },
+            (SExp::Integer(_, a), SExp::Integer(_, b)) => a.partial_cmp(b),
             (a, b) => {
                 let avec = match a {
                     SExp::Integer(_, a) => u8_from_number(a.clone()),
                     SExp::Atom(_, v) => v.clone(),
                     SExp::QuotedString(_, _, v) => v.clone(),
-                    _ => { panic!("Should not be possible"); }
+                    _ => {
+                        panic!("Should not be possible");
+                    }
                 };
                 let bvec = match b {
                     SExp::Integer(_, b) => u8_from_number(b.clone()),
                     SExp::Atom(_, v) => v.clone(),
                     SExp::QuotedString(_, _, v) => v.clone(),
-                    _ => { panic!("Should not be possible"); }
+                    _ => {
+                        panic!("Should not be possible");
+                    }
                 };
                 avec.partial_cmp(&bvec)
             }

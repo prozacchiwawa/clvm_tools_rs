@@ -53,8 +53,7 @@ pub fn detect_include_directive(allocator: &mut Allocator, sexp: NodePtr, name: 
                         match (allocator.sexp(e[0]), allocator.sexp(e[1])) {
                             (SExp::Atom(inc), SExp::Atom(aname)) => {
                                 if allocator.buf(&inc) == "include".as_bytes().to_vec()
-                                    && allocator.buf(&aname)
-                                        == name.as_bytes().to_vec()
+                                    && allocator.buf(&aname) == name.as_bytes().to_vec()
                                 {
                                     return true;
                                 }
