@@ -195,8 +195,8 @@ fn parse_include(
     // Short circuit include directive.
     match allocator.sexp(name) {
         SExp::Atom(nbuf) => {
-            let name_vec = allocator.buf(&nbuf).clone();
-            match KNOWN_INCLUDE_DIRECTIVES.get(name_vec) {
+            let name_vec = allocator.buf(&nbuf).to_vec();
+            match KNOWN_INCLUDE_DIRECTIVES.get(&name_vec) {
                 Some(directive) => {
                     return Ok(Some(directive.clone()));
                 }
