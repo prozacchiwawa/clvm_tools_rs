@@ -969,30 +969,50 @@ fn process_helper_let_bindings(
     return result;
 }
 
+fn sort_by_content(program: &CompileForm) -> bool {
+    let want_name = "*tree-sort-by-content*".as_bytes().to_vec();
+    for h in program.helpers.iter() {
+        if h.name() == want_name { return true; }
+    }
+    false
+}
+
 fn start_codegen(opts: Rc<dyn CompilerOpts>, comp: CompileForm) -> PrimaryCodegen {
     let mut use_compiler = match opts.compiler() {
         None => empty_compiler(opts.prim_map(), comp.loc.clone()),
         Some(c) => c,
     };
+    let do_sort_by_content = sort_by_content(&comp);
 
     let hoisted_bindings = hoist_body_let_binding(&use_compiler, None, comp.args.clone(), comp.exp);
     let mut new_helpers = hoisted_bindings.0;
     let expr = hoisted_bindings.1;
     new_helpers.append(&mut comp.helpers.clone());
     let let_helpers_with_expr = process_helper_let_bindings(&use_compiler.clone(), &new_helpers);
-    let live_helpers = let_helpers_with_expr
-        .iter()
-        .filter(|x| is_defun(x))
-        .map(|x| x.clone())
-        .collect();
 
     use_compiler.env = match opts.start_env() {
         Some(env) => env,
-        None => Rc::new(compute_env_shape(
-            comp.loc.clone(),
-            comp.args.clone(),
-            &live_helpers,
-        )),
+        None => {
+            let mut live_helpers: Vec<HelperForm> = let_helpers_with_expr
+                .iter()
+                .filter(|x| is_defun(x))
+                .map(|x| x.clone())
+                .collect();
+
+            if do_sort_by_content {
+                live_helpers.sort_by(|a,b| {
+                    let arc = a.body().to_sexp();
+                    let brc = b.body().to_sexp();
+                    arc.cmp(brc.borrow())
+                })
+            }
+
+            Rc::new(compute_env_shape(
+                comp.loc.clone(),
+                comp.args.clone(),
+                &live_helpers,
+            ))
+        }
     };
 
     use_compiler.to_process = let_helpers_with_expr;

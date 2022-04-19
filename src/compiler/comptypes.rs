@@ -212,6 +212,14 @@ impl HelperForm {
         }
     }
 
+    pub fn body(&self) -> Rc<BodyForm> {
+        match self {
+            HelperForm::Defconstant(_, _, b) => b.clone(),
+            HelperForm::Defmacro(_, _, _, b) => b.exp.clone(),
+            HelperForm::Defun(_, _, _, _, b) => b.clone(),
+        }
+    }
+
     pub fn to_sexp(&self) -> Rc<SExp> {
         match self {
             HelperForm::Defconstant(loc, name, body) => Rc::new(list_to_cons(

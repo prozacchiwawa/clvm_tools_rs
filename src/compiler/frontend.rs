@@ -596,6 +596,13 @@ fn frontend_start(
     }
 }
 
+fn is_defconstant(h: &HelperForm) -> bool {
+    match h {
+        HelperForm::Defconstant(_,_,_) => true,
+        _ => false
+    }
+}
+
 pub fn frontend(
     opts: Rc<dyn CompilerOpts>,
     pre_forms: Vec<Rc<SExp>>,
@@ -632,7 +639,7 @@ pub fn frontend(
 
     let mut live_helpers = Vec::new();
     for h in our_mod.helpers {
-        if helper_names.contains(&h.name()) {
+        if helper_names.contains(&h.name()) || is_defconstant(&h) {
             live_helpers.push(h);
         }
     }

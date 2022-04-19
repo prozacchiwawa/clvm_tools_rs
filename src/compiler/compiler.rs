@@ -142,6 +142,11 @@ impl CompilerOpts for DefaultCompilerOpts {
                 (defconstant *chialisp-version* 21)
             )"};
             return Ok((filename, content.to_string()));
+        } else if filename == "*tree-sort-by-content*" {
+            let content = indoc! {"(
+                (defconstant *tree-sort-by-content* 1)
+            )"};
+            return Ok((filename, content.to_string()));
         }
 
         for dir in self.include_dirs.iter() {

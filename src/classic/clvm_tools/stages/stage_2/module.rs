@@ -8,15 +8,30 @@ use clvm_rs::reduction::EvalErr;
 use crate::classic::clvm::__type_compatibility__::{Bytes, BytesFromType};
 use crate::classic::clvm::sexp::{enlist, first, flatten, foldM, mapM, non_nil, proper_list, rest};
 use crate::classic::clvm_tools::debug::build_symbol_dump;
+use crate::classic::clvm_tools::sha256tree::sha256tree;
 use crate::classic::clvm_tools::stages::assemble;
 use crate::classic::clvm_tools::stages::stage_0::TRunProgram;
 use crate::classic::clvm_tools::stages::stage_2::helpers::{evaluate, quote};
 use crate::classic::clvm_tools::stages::stage_2::optimize::optimize_sexp;
 use crate::classic::clvm_tools::NodePath::NodePath;
 
+#[derive(Clone, Debug, PartialEq, Hash, Eq)]
+pub enum IncludeDirective {
+    TreeSortByHash
+}
+
 lazy_static! {
     pub static ref MAIN_NAME: String = {
         return "".to_string();
+    };
+
+    pub static ref KNOWN_INCLUDE_DIRECTIVES: HashMap<Vec<u8>, IncludeDirective> = {
+        let mut hs = HashMap::new();
+        hs.insert(
+            "*tree-sort-by-content*".as_bytes().to_vec(),
+            IncludeDirective::TreeSortByHash
+        );
+        hs
     };
 }
 
@@ -24,6 +39,7 @@ struct CollectionResult {
     pub functions: HashMap<Vec<u8>, NodePtr>,
     pub constants: HashMap<Vec<u8>, NodePtr>,
     pub macros: Vec<(Vec<u8>, NodePtr)>,
+    pub directives: HashSet<IncludeDirective>,
 }
 
 // export type TBuildTree = Bytes | Tuple<TBuildTree, TBuildTree> | [];
@@ -68,6 +84,9 @@ fn build_tree_program(allocator: &mut Allocator, items: &Vec<NodePtr>) -> Result
     }
 }
 
+#[derive(Eq, PartialEq, Clone, Ord, PartialOrd)]
+struct HashAndName(Vec<u8>, Vec<u8>);
+
 /**
  * @return Used constants name array in `hex string` format.
  */
@@ -76,6 +95,7 @@ fn build_used_constants_names(
     functions: &HashMap<Vec<u8>, NodePtr>,
     constants: &HashMap<Vec<u8>, NodePtr>,
     macros: &Vec<(Vec<u8>, NodePtr)>,
+    directives: &HashSet<IncludeDirective>,
 ) -> Result<Vec<Vec<u8>>, EvalErr> {
     /*
     Do a naïve pruning of unused symbols. It may be too big, but it shouldn't
@@ -147,7 +167,21 @@ fn build_used_constants_names(
         }
     }
 
-    used_name_list.sort();
+    if directives.contains(&IncludeDirective::TreeSortByHash) {
+        let mut hash_and_name_list: Vec<HashAndName> =
+            used_name_list.iter().map(|name| {
+                let hash = functions.get(name).map(|body| {
+                    sha256tree(allocator, *body).data().clone()
+                }).unwrap_or_else(|| Vec::new()); // Non functions don't count.
+                HashAndName(hash, name.clone())
+            }).collect();
+        hash_and_name_list.sort();
+        used_name_list = hash_and_name_list.iter().map(|hn| {
+            hn.1.clone()
+        }).collect();
+    } else {
+        used_name_list.sort();
+    }
     return Ok(used_name_list);
 }
 
@@ -159,7 +193,21 @@ fn parse_include(
     constants: &mut HashMap<Vec<u8>, NodePtr>,
     macros: &mut Vec<(Vec<u8>, NodePtr)>,
     run_program: Rc<dyn TRunProgram>,
-) -> Result<(), EvalErr> {
+) -> Result<Option<IncludeDirective>, EvalErr> {
+    // Short circuit include directive.
+    match allocator.sexp(name) {
+        SExp::Atom(nbuf) => {
+            let name_vec = allocator.buf(&nbuf).clone();
+            match KNOWN_INCLUDE_DIRECTIVES.get(name_vec) {
+                Some(directive) => {
+                    return Ok(Some(directive.clone()));
+                },
+                _ => {}
+            }
+        },
+        _ => {}
+    }
+
     return m! {
         prog <- assemble(
             allocator,
@@ -188,7 +236,7 @@ fn parse_include(
                         Ok(_) => { }
                     }
                 };
-                Ok(())
+                Ok(None)
             }
         }
     };
@@ -265,7 +313,7 @@ fn parse_mod_sexp(
     constants: &mut HashMap<Vec<u8>, NodePtr>,
     macros: &mut Vec<(Vec<u8>, NodePtr)>,
     run_program: Rc<dyn TRunProgram>,
-) -> Result<(), EvalErr> {
+) -> Result<Option<IncludeDirective>, EvalErr> {
     return m! {
         op_node <- first(allocator, declaration_sexp);
         dec_rest <- rest(allocator, declaration_sexp);
@@ -299,20 +347,20 @@ fn parse_mod_sexp(
 
                 if op == "defmacro".as_bytes() {
                     macros.push((name.to_vec(), declaration_sexp));
-                    Ok(())
+                    Ok(None)
                 } else if op == "defun".as_bytes() {
                     m! {
                         declaration_sexp_r <- rest(allocator, declaration_sexp);
                         declaration_sexp_rr <- rest(allocator, declaration_sexp_r);
                         let _ = functions.insert(name, declaration_sexp_rr);
-                        Ok(())
+                        Ok(None)
                     }
                 } else if op == "defun-inline".as_bytes() {
                     m! {
                         defined_macro <-
                             defun_inline_to_macro(allocator, declaration_sexp);
                         let _ = macros.push((name, defined_macro));
-                        Ok(())
+                        Ok(None)
                     }
                 } else if op == "defconstant".as_bytes() {
                     m! {
@@ -321,7 +369,7 @@ fn parse_mod_sexp(
                         frr_of_declaration <- first(allocator, rr_of_declaration);
                         quoted_decl <- quote(allocator, frr_of_declaration);
                         let _ = constants.insert(name, quoted_decl);
-                        Ok(())
+                        Ok(None)
                     }
                 } else {
                     Err(EvalErr(declaration_sexp, "expected defun, defmacro, or defconstant".to_string()))
@@ -342,6 +390,7 @@ fn compile_mod_stage_1(
         let mut constants = HashMap::new();
         let mut macros = Vec::new();
         let mut namespace = HashSet::new();
+        let mut directives = HashSet::new();
 
         // eslint-disable-next-line no-constant-condition
         match proper_list(allocator, args, true) {
@@ -364,7 +413,10 @@ fn compile_mod_stage_1(
                         run_program.clone()
                     ) {
                         Err(e) => { return Err(e); },
-                        Ok(_) => { }
+                        Ok(None) => { }
+                        Ok(Some(directive)) => {
+                            directives.insert(directive.clone());
+                        }
                     }
                 }
 
@@ -380,7 +432,8 @@ fn compile_mod_stage_1(
                     Ok(CollectionResult {
                         functions: functions,
                         constants: constants,
-                        macros: macros
+                        macros: macros,
+                        directives: directives
                     })
                 };
             }
@@ -573,7 +626,8 @@ pub fn compile_mod(
 
         // get a list of all symbols that are possibly used
         all_constants_names <- build_used_constants_names(
-            allocator, &cr.functions, &cr.constants, &cr.macros
+            allocator, &cr.functions, &cr.constants, &cr.macros,
+            &cr.directives
         );
 
         let has_constants_tree = all_constants_names.len() > 0;

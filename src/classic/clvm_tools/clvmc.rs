@@ -30,14 +30,14 @@ use crate::compiler::comptypes::CompileErr;
 use crate::compiler::comptypes::CompilerOpts;
 use crate::compiler::runtypes::RunFailure;
 
-pub fn detect_modern(allocator: &mut Allocator, sexp: NodePtr) -> bool {
+pub fn detect_include_directive(allocator: &mut Allocator, sexp: NodePtr, name: &String) -> bool {
     match proper_list(allocator, sexp, true) {
         None => {
             return false;
         }
         Some(l) => {
             for elt in l.iter() {
-                if detect_modern(allocator, *elt) {
+                if detect_include_directive(allocator, *elt, name) {
                     return true;
                 }
 
@@ -51,10 +51,10 @@ pub fn detect_modern(allocator: &mut Allocator, sexp: NodePtr) -> bool {
                         }
 
                         match (allocator.sexp(e[0]), allocator.sexp(e[1])) {
-                            (SExp::Atom(inc), SExp::Atom(name)) => {
+                            (SExp::Atom(inc), SExp::Atom(aname)) => {
                                 if allocator.buf(&inc) == "include".as_bytes().to_vec()
-                                    && allocator.buf(&name)
-                                        == "*standard-cl-21*".as_bytes().to_vec()
+                                    && allocator.buf(&aname)
+                                        == name.as_bytes().to_vec()
                                 {
                                     return true;
                                 }
@@ -70,6 +70,11 @@ pub fn detect_modern(allocator: &mut Allocator, sexp: NodePtr) -> bool {
     }
 
     return false;
+}
+
+// Improve this in case other include directives need detection here.
+pub fn detect_modern(allocator: &mut Allocator, sexp: NodePtr) -> bool {
+    return detect_include_directive(allocator, sexp, &"*standard-cl-21*".to_string());
 }
 
 fn compile_clvm_text(

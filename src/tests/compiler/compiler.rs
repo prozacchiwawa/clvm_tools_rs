@@ -438,7 +438,7 @@ fn inline_compile_test() {
         "}
         .to_string(),
     )
-    .unwrap();
+        .unwrap();
     assert_eq!(result, "(2 (1 16 5 (1 . 1)) (4 (1) 1))".to_string());
 }
 
@@ -476,4 +476,36 @@ fn cant_redefine_defun_with_defun() {
         ));
         assert!(result.is_err());
     }
+}
+
+#[test]
+fn sort_order_by_content() {
+    let result = compile_string(
+        &indoc! {"
+        (mod (Z)
+          (include *standard-cl-21*)
+          (include *tree-sort-by-content*)
+
+          (defun B (X) (+ X 1))
+          (defun A (X) (* X 2))
+          (A (B Z)))
+        "}
+        .to_string(),
+    )
+        .unwrap();
+    assert_eq!(result, "(2 (1 2 4 (4 2 (4 (2 6 (4 2 (4 5 ()))) ()))) (4 (1 (2 (1 18 5 (1 . 2)) 1) 2 (1 16 5 (1 . 1)) 1) 1))".to_string());
+
+    let result = compile_string(
+        &indoc! {"
+        (mod (Z)
+          (include *standard-cl-21*)
+
+          (defun B (X) (+ X 1))
+          (defun A (X) (* X 2))
+          (A (B Z)))
+        "}
+        .to_string(),
+    )
+        .unwrap();
+    assert_eq!(result, "(2 (1 2 6 (4 2 (4 (2 4 (4 2 (4 5 ()))) ()))) (4 (1 (2 (1 16 5 (1 . 1)) 1) 2 (1 18 5 (1 . 2)) 1) 1))".to_string());
 }

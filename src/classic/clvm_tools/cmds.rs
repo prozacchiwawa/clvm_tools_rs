@@ -1113,6 +1113,7 @@ pub fn launch_tool(
                 _ => false,
             })
             .unwrap_or_else(|| false);
+
         let runner = Rc::new(DefaultProgramRunner::new());
         let use_filename = input_file.unwrap_or_else(|| "*command*".to_string());
         let opts = Rc::new(DefaultCompilerOpts::new(&use_filename)).set_optimize(do_optimize);
