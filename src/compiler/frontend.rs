@@ -11,7 +11,7 @@ use crate::compiler::comptypes::{
 };
 use crate::compiler::preprocessor::preprocess;
 use crate::compiler::rename::rename_children_compileform;
-use crate::compiler::sexp::{decode_string, enlist, SExp};
+use crate::compiler::sexp::{enlist, SExp};
 use crate::compiler::srcloc::Srcloc;
 use crate::util::u8_from_number;
 
@@ -56,7 +56,6 @@ fn collect_used_names_bodyform(body: &BodyForm) -> Vec<Vec<u8>> {
             }
             _ => Vec::new(),
         },
-        BodyForm::Value(_) => vec![],
         BodyForm::Call(_l, vs) => {
             let mut result = Vec::new();
             for a in vs {

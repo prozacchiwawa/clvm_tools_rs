@@ -7,6 +7,7 @@ use crate::classic::clvm_tools::stages::stage_0::DefaultProgramRunner;
 use crate::compiler::clvm::run;
 use crate::compiler::compiler::{compile_file, DefaultCompilerOpts};
 use crate::compiler::comptypes::CompileErr;
+use crate::compiler::prims::prim_map;
 use crate::compiler::runtypes::RunFailure;
 use crate::compiler::sexp::{parse_sexp, SExp};
 use crate::compiler::srcloc::Srcloc;
@@ -14,19 +15,21 @@ use crate::compiler::srcloc::Srcloc;
 fn compile_string(content: &String) -> Result<String, CompileErr> {
     let mut allocator = Allocator::new();
     let runner = Rc::new(DefaultProgramRunner::new());
+    let prims = prim_map();
     let opts = Rc::new(DefaultCompilerOpts::new(&"*test*".to_string()));
 
-    compile_file(&mut allocator, runner, opts, &content).map(|x| x.to_string())
+    compile_file(&mut allocator, runner, prims.clone(), opts, &content).map(|x| x.to_string())
 }
 
 fn run_string(content: &String, args: &String) -> Result<Rc<SExp>, CompileErr> {
     let mut allocator = Allocator::new();
     let runner = Rc::new(DefaultProgramRunner::new());
     let srcloc = Srcloc::start(&"*test*".to_string());
+    let prims = prim_map();
     let opts = Rc::new(DefaultCompilerOpts::new(&"*test*".to_string()));
     let sexp_args = parse_sexp(srcloc.clone(), &args).map_err(|e| CompileErr(e.0, e.1))?[0].clone();
 
-    compile_file(&mut allocator, runner.clone(), opts, &content).and_then(|x| {
+    compile_file(&mut allocator, runner.clone(), prims.clone(), opts, &content).and_then(|x| {
         run(
             &mut allocator,
             runner,

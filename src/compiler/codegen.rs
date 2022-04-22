@@ -8,13 +8,13 @@ use num_bigint::ToBigInt;
 use crate::classic::clvm_tools::stages::stage_0::TRunProgram;
 use clvm_rs::allocator::Allocator;
 
-use crate::classic::clvm::__type_compatibility__::{bi_one, Bytes, BytesFromType};
+use crate::classic::clvm::__type_compatibility__::bi_one;
 
 use crate::compiler::clvm::run;
 use crate::compiler::compiler::run_optimizer;
 use crate::compiler::comptypes::{
-    cons_of_string_map, foldM, join_vecs_to_string, list_to_cons, mapM, with_heading, Binding,
-    BodyForm, Callable, CompileErr, CompileForm, CompiledCode, CompilerOpts, DefunCall, HelperForm,
+    cons_of_string_map, foldM, join_vecs_to_string, list_to_cons, with_heading, Binding, BodyForm,
+    Callable, CompileErr, CompileForm, CompiledCode, CompilerOpts, DefunCall, HelperForm,
     InlineFunction, LetFormKind, PrimaryCodegen,
 };
 use crate::compiler::debug::{build_swap_table_mut, relabel};
@@ -22,11 +22,11 @@ use crate::compiler::frontend::compile_bodyform;
 use crate::compiler::gensym::gensym;
 use crate::compiler::inline::{replace_in_inline, synthesize_args};
 use crate::compiler::optimize::optimize_expr;
-use crate::compiler::prims::{primapply, primcons, primquote, prims};
+use crate::compiler::prims::{primapply, primcons, primquote};
 use crate::compiler::runtypes::RunFailure;
-use crate::compiler::sexp::{decode_string, enlist, SExp};
+use crate::compiler::sexp::{decode_string, SExp};
 use crate::compiler::srcloc::Srcloc;
-use crate::util::{number_from_u8, u8_from_number};
+use crate::util::u8_from_number;
 
 /* As in the python code, produce a pair whose (thanks richard)
  *
@@ -335,6 +335,7 @@ pub fn get_callable(
 pub fn process_macro_call(
     allocator: &mut Allocator,
     runner: Rc<dyn TRunProgram>,
+    prims: Rc<HashMap<Vec<u8>, Rc<SExp>>>,
     opts: Rc<dyn CompilerOpts>,
     compiler: &PrimaryCodegen,
     l: Srcloc,
@@ -374,12 +375,13 @@ pub fn process_macro_call(
         let relabeled_expr = relabel(&mut swap_table, &v);
         compile_bodyform(Rc::new(relabeled_expr))
     })
-    .and_then(|body| generate_expr_code(allocator, runner, opts, compiler, Rc::new(body)))
+    .and_then(|body| generate_expr_code(allocator, runner, prims, opts, compiler, Rc::new(body)))
 }
 
 fn generate_args_code(
     allocator: &mut Allocator,
     runner: Rc<dyn TRunProgram>,
+    prims: Rc<HashMap<Vec<u8>, Rc<SExp>>>,
     opts: Rc<dyn CompilerOpts>,
     compiler: &PrimaryCodegen,
     l: Srcloc,
@@ -393,6 +395,7 @@ fn generate_args_code(
             let generated = generate_expr_code(
                 allocator,
                 runner.clone(),
+                prims.clone(),
                 opts.clone(),
                 compiler,
                 hd.clone(),
@@ -449,6 +452,7 @@ pub fn get_call_name(l: Srcloc, body: BodyForm) -> Result<Rc<SExp>, CompileErr> 
 fn compile_call(
     allocator: &mut Allocator,
     runner: Rc<dyn TRunProgram>,
+    prims: Rc<HashMap<Vec<u8>, Rc<SExp>>>,
     l: Srcloc,
     opts: Rc<dyn CompilerOpts>,
     compiler: &PrimaryCodegen,
@@ -479,6 +483,7 @@ fn compile_call(
             Callable::CallMacro(l, code) => process_macro_call(
                 allocator,
                 runner,
+                prims,
                 opts.clone(),
                 compiler,
                 l.clone(),
@@ -497,7 +502,7 @@ fn compile_call(
             ),
 
             Callable::CallDefun(l, lookup) => {
-                generate_args_code(allocator, runner, opts.clone(), compiler, l.clone(), &tl)
+                generate_args_code(allocator, runner, prims.clone(), opts.clone(), compiler, l.clone(), &tl)
                     .and_then(|args| {
                         process_defun_call(
                             opts.clone(),
@@ -510,7 +515,7 @@ fn compile_call(
             }
 
             Callable::CallPrim(l, p) => {
-                generate_args_code(allocator, runner, opts, compiler, l.clone(), &tl).map(|args| {
+                generate_args_code(allocator, runner, prims, opts, compiler, l.clone(), &tl).map(|args| {
                     CompiledCode(l.clone(), Rc::new(SExp::Cons(l, Rc::new(p), Rc::new(args))))
                 })
             }
@@ -558,7 +563,7 @@ fn compile_call(
                     );
 
                     updated_opts
-                        .compile_program(allocator, runner, Rc::new(use_body))
+                        .compile_program(allocator, runner, prims, Rc::new(use_body))
                         .map(|code| {
                             CompiledCode(l.clone(), Rc::new(primquote(l.clone(), Rc::new(code))))
                         })
@@ -582,6 +587,7 @@ fn compile_call(
 pub fn generate_expr_code(
     allocator: &mut Allocator,
     runner: Rc<dyn TRunProgram>,
+    prims: Rc<HashMap<Vec<u8>, Rc<SExp>>>,
     opts: Rc<dyn CompilerOpts>,
     compiler: &PrimaryCodegen,
     expr: Rc<BodyForm>,
@@ -590,7 +596,7 @@ pub fn generate_expr_code(
         BodyForm::Let(l, LetFormKind::Parallel, bindings, expr) => {
             /* Depends on a defun having been desugared from this let and the let
             expressing rewritten. */
-            generate_expr_code(allocator, runner, opts, compiler, expr.clone())
+            generate_expr_code(allocator, runner, prims, opts, compiler, expr.clone())
         }
         BodyForm::Quoted(q) => {
             let l = q.loc();
@@ -617,6 +623,7 @@ pub fn generate_expr_code(
                                 generate_expr_code(
                                     allocator,
                                     runner,
+                                    prims,
                                     opts,
                                     compiler,
                                     Rc::new(BodyForm::Quoted(SExp::Atom(l.clone(), atom.clone()))),
@@ -631,6 +638,7 @@ pub fn generate_expr_code(
                 SExp::Integer(l, i) => generate_expr_code(
                     allocator,
                     runner,
+                    prims,
                     opts,
                     compiler,
                     Rc::new(BodyForm::Value(SExp::Atom(
@@ -651,7 +659,7 @@ pub fn generate_expr_code(
                     "created a call with no forms".to_string(),
                 ))
             } else {
-                compile_call(allocator, runner, l.clone(), opts, compiler, list.to_vec())
+                compile_call(allocator, runner, prims, l.clone(), opts, compiler, list.to_vec())
             }
         }
         _ => Err(CompileErr(
@@ -712,7 +720,7 @@ fn codegen_(
             );
             let updated_opts = opts.set_compiler(compiler.clone());
             let code =
-                updated_opts.compile_program(allocator, runner.clone(), Rc::new(expand_program))?;
+                updated_opts.compile_program(allocator, runner.clone(), opts.prim_map(), Rc::new(expand_program))?;
             run(
                 allocator,
                 runner,
@@ -746,7 +754,7 @@ fn codegen_(
                 .set_stdenv(false);
 
             updated_opts
-                .compile_program(allocator, runner.clone(), macro_program)
+                .compile_program(allocator, runner.clone(), opts.prim_map(), macro_program)
                 .and_then(|code| {
                     if opts.optimize() {
                         run_optimizer(allocator, runner, Rc::new(code))
@@ -806,7 +814,7 @@ fn codegen_(
                 );
 
                 updated_opts
-                    .compile_program(allocator, runner.clone(), Rc::new(tocompile))
+                    .compile_program(allocator, runner.clone(), opts.prim_map(), Rc::new(tocompile))
                     .and_then(|code| {
                         if opts.optimize() {
                             run_optimizer(allocator, runner, Rc::new(code))
@@ -821,7 +829,7 @@ fn codegen_(
                             name,
                             DefunCall {
                                 required_env: args.clone(),
-                                code: code,
+                                code,
                             },
                         )
                     })
@@ -946,7 +954,7 @@ fn process_helper_let_bindings(
     while i < result.len() {
         match result[i].clone() {
             HelperForm::Defun(l, name, inline, args, body) => {
-                let context = if (inline) { Some(args.clone()) } else { None };
+                let context = if inline { Some(args.clone()) } else { None };
                 let helper_result =
                     hoist_body_let_binding(compiler, context, args.clone(), body.clone());
                 let hoisted_helpers = helper_result.0;
@@ -1025,7 +1033,7 @@ fn final_codegen(
         compiler.final_expr.clone()
     };
 
-    generate_expr_code(allocator, runner, opts, compiler, opt_final_expr).map(|code| {
+    generate_expr_code(allocator, runner, opts.prim_map(), opts, compiler, opt_final_expr).map(|code| {
         let mut final_comp = compiler.clone();
         final_comp.final_code = Some(CompiledCode(code.0, code.1));
         final_comp

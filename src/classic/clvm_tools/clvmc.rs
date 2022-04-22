@@ -1,6 +1,4 @@
-use std::cmp::min;
 use std::fs;
-use std::fs::File;
 use std::io::Write;
 use std::path::Path;
 use std::rc::Rc;
@@ -20,7 +18,6 @@ use crate::classic::clvm_tools::stages::stage_0::{DefaultProgramRunner, TRunProg
 use crate::classic::clvm_tools::stages::stage_2::operators::run_program_for_search_paths;
 
 use crate::classic::platform::distutils::dep_util::newer;
-use crate::classic::platform::distutils::log;
 
 use crate::compiler::clvm::convert_to_clvm_rs;
 use crate::compiler::compiler::compile_file;
@@ -28,6 +25,7 @@ use crate::compiler::compiler::run_optimizer;
 use crate::compiler::compiler::DefaultCompilerOpts;
 use crate::compiler::comptypes::CompileErr;
 use crate::compiler::comptypes::CompilerOpts;
+use crate::compiler::prims::prim_map;
 use crate::compiler::runtypes::RunFailure;
 
 pub fn detect_modern(allocator: &mut Allocator, sexp: NodePtr) -> bool {
@@ -78,6 +76,7 @@ fn compile_clvm_text(
     text: String,
     search_paths: &Vec<String>,
 ) -> Result<NodePtr, EvalErr> {
+    let prims = prim_map();
     let ir_src = read_ir(&text).map_err(|s| EvalErr(allocator.null(), s))?;
     let assembled_sexp = assemble_from_ir(allocator, Rc::new(ir_src))?;
 
@@ -87,7 +86,7 @@ fn compile_clvm_text(
             .set_optimize(true)
             .set_search_paths(&search_paths);
 
-        let unopt_res = compile_file(allocator, runner.clone(), opts.clone(), &text);
+        let unopt_res = compile_file(allocator, runner.clone(), prims.clone(), opts.clone(), &text);
         let res = unopt_res.and_then(|x| run_optimizer(allocator, runner, Rc::new(x)));
 
         res.and_then(|x| {
@@ -145,7 +144,7 @@ pub fn compile_clvm(
                 )
             })?;
 
-            let written = temp_output_file
+            let _ = temp_output_file
                 .write_all(&result_stream.get_value().hex().as_bytes())
                 .map_err(|_| format!("failed to write to {:?}", temp_output_file.path()))?;
 

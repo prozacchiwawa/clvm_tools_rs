@@ -323,12 +323,13 @@ impl Evaluator {
     }
 
     // A frontend language evaluator and minifier
-    pub fn shrink_bodyform(
+    fn shrink_bodyform_(
         &self,
         allocator: &mut Allocator, // Support random prims via clvm_rs
         prog_args: Rc<SExp>,
         env: &HashMap<Vec<u8>, Rc<BodyForm>>,
         body: Rc<BodyForm>,
+        only_inline: bool
     ) -> Result<Rc<BodyForm>, CompileErr> {
         match body.borrow() {
             BodyForm::Let(l, LetFormKind::Parallel, bindings, body) => {
@@ -337,7 +338,8 @@ impl Evaluator {
                     allocator,
                     prog_args.clone(),
                     &updated_bindings,
-                    body.clone()
+                    body.clone(),
+                    only_inline
                 )
             },
             BodyForm::Let(l, LetFormKind::Sequential, bindings, body) => {
@@ -346,7 +348,8 @@ impl Evaluator {
                         allocator,
                         prog_args.clone(),
                         env,
-                        body.clone()
+                        body.clone(),
+                        only_inline
                     )
                 } else {
                     let first_binding_as_list: Vec<Rc<Binding>> =
@@ -367,7 +370,8 @@ impl Evaluator {
                             LetFormKind::Sequential,
                             rest_of_bindings,
                             body.clone()
-                        ))
+                        )),
+                        only_inline
                     )
                 }
             },
@@ -382,7 +386,8 @@ impl Evaluator {
                         allocator,
                         prog_args.clone(),
                         env,
-                        literal_args
+                        literal_args,
+                        only_inline
                     )
                 } else {
                     env.get(name).map(|x| {
@@ -390,7 +395,8 @@ impl Evaluator {
                             allocator,
                             prog_args.clone(),
                             env,
-                            x.clone()
+                            x.clone(),
+                            only_inline
                         )
                     }).unwrap_or_else(|| {
                         self.get_constant(name).map(|x| {
@@ -398,7 +404,8 @@ impl Evaluator {
                                 allocator,
                                 prog_args.clone(),
                                 env,
-                                x.clone()
+                                x.clone(),
+                                only_inline
                             )
                         }).unwrap_or_else(|| {
                             Ok(Rc::new(BodyForm::Value(SExp::Atom(l.clone(),name.clone()))))
@@ -471,11 +478,17 @@ impl Evaluator {
                                         allocator,
                                         prog_args.clone(),
                                         &env,
-                                        program.exp.clone()
+                                        program.exp.clone(),
+                                        only_inline
                                     )
                                 })
                             },
-                            Some(HelperForm::Defun(l, name, inline, args, body)) => {
+                            Some(HelperForm::Defun(l, name, inline, args, fun_body)) => {
+                                if !inline && only_inline {
+                                    println!("not expanding non-inline {}", body.to_sexp().to_string());
+                                    return Ok(body.clone());
+                                }
+
                                 let mut argument_captures_untranslated =
                                     build_argument_captures(
                                         call_loc,
@@ -490,7 +503,8 @@ impl Evaluator {
                                         allocator,
                                         prog_args.clone(),
                                         env,
-                                        kv.1.clone()
+                                        kv.1.clone(),
+                                        only_inline
                                     )?;
 
                                     argument_captures.insert(
@@ -503,7 +517,8 @@ impl Evaluator {
                                     allocator,
                                     args.clone(),
                                     &argument_captures,
-                                    body
+                                    fun_body,
+                                    only_inline
                                 )
                             },
                             None => {
@@ -561,7 +576,8 @@ impl Evaluator {
                                                 allocator,
                                                 prog_args.clone(),
                                                 env,
-                                                arguments_to_convert[i].clone()
+                                                arguments_to_convert[i].clone(),
+                                                only_inline
                                             )?;
 
                                             target_vec[i+1] = shrunk.clone();
@@ -624,6 +640,28 @@ impl Evaluator {
                 }
             }
         }
+    }
+
+    pub fn shrink_bodyform(
+        &self,
+        allocator: &mut Allocator, // Support random prims via clvm_rs
+        prog_args: Rc<SExp>,
+        env: &HashMap<Vec<u8>, Rc<BodyForm>>,
+        body: Rc<BodyForm>,
+        only_inline: bool
+    ) -> Result<Rc<BodyForm>, CompileErr> {
+        let result = self.shrink_bodyform_(
+            allocator,
+            prog_args.clone(),
+            env,
+            body.clone(),
+            only_inline
+        )?;
+        println!("shrink_bodyform (inline {}) args {} body {} => {}", only_inline, prog_args.to_string(), body.to_sexp().to_string(), result.to_sexp().to_string());
+        println!("env --");
+        show_env(env);
+        println!("-- end");
+        Ok(result)
     }
 
     fn expand_macro(
@@ -746,6 +784,7 @@ impl Evaluator {
             .compile_program(
                 allocator,
                 self.runner.clone(),
+                self.prims.clone(),
                 use_body
             )?;
 
