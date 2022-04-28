@@ -51,7 +51,7 @@ jobs:
         python -m venv venv
         ln -s venv/bin/activate
         . ./activate
-        cd workspace/python-extension && maturin build --no-sdist -i python --release --strip
+      maturin build --no-sdist -i python --release --strip -m workspaces/python-extension/Cargo.toml
 
     - name: Build Linux in manylinux2010 with maturin on Python ${{ matrix.python }}
       if: startsWith(matrix.os, 'ubuntu')
@@ -78,8 +78,9 @@ jobs:
             if [ ! -f "activate" ]; then ln -s venv/bin/activate; fi && \
             . ./activate && \
             pip install --upgrade pip && \
-            pip install maturin && cd workspace/python-extension && \
+            pip install maturin \
             CC=gcc maturin build --no-sdist --release --strip --manylinux 2010 \
+               -m workspace/python-extension/Cargo.toml
           '
 
     - name: Build Windows with maturin on Python ${{ matrix.python }}
@@ -88,7 +89,7 @@ jobs:
         python -m venv venv
         echo ". .\venv\Scripts\Activate.ps1" > activate.ps1
         . ./activate
-        cd workspace/python-extension && maturin build --no-sdist -i python --release --strip
+        maturin build --no-sdist -i python --release --strip -m workspaces/python-extension/Cargo.toml
         # Find and install the newly built wheel
         python support/wheelname.py
 

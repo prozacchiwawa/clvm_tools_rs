@@ -13,7 +13,7 @@ tempfile = "3.3.0"
 
 [lib]
 name = "clvm_tools_rs"
-crate-type = ["cdylib", "rlib"]
+crate-type = ["cdylib"]
 
 [build-dependencies]
 pyo3-build-config = "0.15.1"

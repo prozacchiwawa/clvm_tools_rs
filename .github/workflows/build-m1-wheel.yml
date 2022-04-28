@@ -43,7 +43,7 @@ jobs:
         . ./venv/bin/activate
         export PATH=~/.cargo/bin:$PATH
         arch -arm64 pip install maturin
-        cd workspace/python-extension && arch -arm64 maturin build --no-sdist -i python --release --strip
+        arch -arm64 maturin build --no-sdist -i python --release --strip -m workspaces/python-extension/Cargo.toml
         arch -arm64 cargo build
 
     - name: Install clvm_tools_rs wheel
