@@ -37,7 +37,7 @@ fn nil_in_list_opd() {
 fn big_decode_opd() {
     let mut allocator = Allocator::new();
     let mut testpath = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
-    testpath.push("resources/tests");
+    testpath.push("../../resources/tests");
     let mut in_path = testpath.clone();
     in_path.push("big_decode_in.txt");
     let mut out_path = testpath.clone();
@@ -333,7 +333,7 @@ fn map_6() {
 #[test]
 fn pool_member_innerpuz() {
     let mut testpath = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
-    testpath.push("resources/tests/stage_2");
+    testpath.push("../../resources/tests/stage_2");
     let program = indoc! {"
         (mod (POOL_PUZZLE_HASH
               P2_SINGLETON_PUZZLE_HASH
