@@ -1,0 +1,19 @@
+[package]
+name = "clvm_tools_rs"
+version = "0.1.8"
+edition = "2018"
+
+# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
+
+[dependencies]
+clvm_tools_rlib = { path = "../native" }
+pyo3 = { version = "0.14.2", features = ["abi3-py37", "extension-module"] }
+lazy_static = "1.4.0"
+tempfile = "3.3.0"
+
+[lib]
+name = "clvm_tools_rs"
+crate-type = ["cdylib", "rlib"]
+
+[build-dependencies]
+pyo3-build-config = "0.15.1"

@@ -117,7 +117,7 @@ dependencies = [
 ]
 
 [[package]]
-name = "clvm_tools_rs"
+name = "clvm_tools_rlib"
 version = "0.1.8"
 dependencies = [
  "bls12_381",
@@ -132,8 +132,6 @@ dependencies = [
  "num 0.4.0",
  "num-bigint 0.4.0",
  "num-traits",
- "pyo3",
- "pyo3-build-config 0.15.1",
  "serde_json",
  "sha2",
  "tempfile",
@@ -141,6 +139,17 @@ dependencies = [
  "wasm-bindgen",
  "wasm-bindgen-test",
  "yamlette",
+]
+
+[[package]]
+name = "clvm_tools_rs"
+version = "0.1.8"
+dependencies = [
+ "clvm_tools_rlib",
+ "lazy_static",
+ "pyo3",
+ "pyo3-build-config 0.15.1",
+ "tempfile",
 ]
 
 [[package]]
