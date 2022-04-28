@@ -31,6 +31,12 @@ git = "https://github.com/prozacchiwawa/clvm_rs"
 branch = "20211029-try-config"
 package = "clvm_rust"
 
+[target.x86_64-apple-darwin]
+rustflags = [
+  "-C", "link-arg=-undefined",
+  "-C", "link-arg=dynamic_lookup",
+]
+
 [lib]
 name = "clvm_tools_rs"
 crate-type = ["cdylib", "rlib"]

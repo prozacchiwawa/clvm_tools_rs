@@ -44,6 +44,7 @@ jobs:
         export PATH=~/.cargo/bin:$PATH
         arch -arm64 pip install maturin
         arch -arm64 maturin build --no-sdist -i python --release --strip
+        arch -arm64 cargo build
 
     - name: Install clvm_tools_rs wheel
       run: |
