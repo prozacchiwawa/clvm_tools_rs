@@ -1,0 +1,23 @@
+{
+  "name": "clvm_tools_rs_mock_test",
+  "dependencies": {
+    "@wasm-tool/wasm-pack-plugin": "^1.6.0",
+    "axios": "^0.27.2",
+    "binascii": "^0.0.2",
+    "browserfs": "^1.4.3",
+    "path": "^0.12.7",
+    "process": "^0.11.10",
+    "text-encoding": "^0.7.0",
+    "util": "^0.12.4",
+    "web-encoding": "^1.1.5",
+    "webpack": "^5.72.0",
+    "webpack-cli": "^4.9.2"
+  },
+  "devDependencies": {
+    "@babel/core": "^7.1.6",
+    "@babel/node": "^7.10.5",
+    "@babel/preset-env": "^7.1.6",
+    "babel-loader": "^8.0.4",
+    "babelify": "^10.0.0"
+  }
+}
