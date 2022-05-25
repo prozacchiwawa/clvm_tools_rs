@@ -1,5 +1,10 @@
 import * as axios from 'axios';
 
+const scrollToBottom = (id) => {
+    const element = document.getElementById(id);
+    element.scrollTop = element.scrollHeight;
+};
+
 function repl() {
 	console.log('about to require clvm_tools_rs');
 	var r = require('./clvm_tools_rs.js');
@@ -28,11 +33,12 @@ function repl() {
 	    var result = r.repl_run_string(repl, input);
 	    if (result.error !== undefined) {
 	        addTranscript('E ' + result.error);
-	    } else if (result != null) {
+	    } else if (result) {
 	        addTranscript('< ' + input + '\n> ' + r.sexp_to_string(result));
 	    } else {
 	        addTranscript('< ' + input + '\n...');
 	    }
+      scrollToBottom('repl-transcript-holder');
 	});
 }
 
@@ -48,30 +54,3 @@ axios.get('/clvm_tools_rs_bg.wasm', {responseType: 'blob'}).then((resp) => {
 		repl();
 	});
 });
-/*
-var replButton = document.getElementById('repl-send-input');
-var replInput = document.getElementById('repl-input');
-var replTranscript = document.getElementById('repl-transcript');
-
-function addTranscript(s) {
-    var lines = s.split('\n');
-    for (var i = 0; i < lines.length; i++) {
-        var line = lines[i];
-        var lineElement = document.createElement('pre');
-        lineElement.appendChild(document.createTextNode(line));
-        replTranscript.appendChild(lineElement);
-    }
-}
-
-replButton.addEventListener('click', () => {
-    var input = replInput.value.trim();
-    var result = r.repl_run_string(input);
-    if (result.error !== undefined) {
-        addTranscript('E ' + result.error);
-    } else if (result != null) {
-        addTranscript('< ' + input + '\n> ' + r.sexp_to_string(result));
-    } else {
-        addTranscript('< ' + input + '\n...');
-    }
-});
-*/

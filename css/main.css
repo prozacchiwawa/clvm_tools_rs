@@ -151,3 +151,28 @@ h4 {
     padding-right: 1rem;
     position: relative;
 }
+
+.repl-container-back {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    position: absolute;
+    z-index: 2;
+    left: 0;
+    top: 0;
+    width: 100%;
+    height: 100%;
+    background-color: rgba(0,0,0,0.6);
+}
+
+.repl-container {
+    width: 90%;
+    height: 90%;
+}
+
+.back {
+    color: white;
+    font-family: sans-serif;
+    cursor: pointer;
+}

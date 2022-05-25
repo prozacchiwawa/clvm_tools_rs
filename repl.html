@@ -19,9 +19,14 @@
              flex-direction: column;
              background-color: #ddd;
              color: black;
+             margin-left: 1rem;
+             margin-right: 1rem;
+             overscroll-behavior-y: contain;
+             scroll-snap-type: y mandatory;
          }
 
          .repl-transcript {
+             scroll-snap-align: start;
          }
 
          .app {
@@ -50,15 +55,22 @@
          h3 {
              font-size: 1rem;
          }
+
+         .subhead {
+             font-size: 0.75rem;
+             margin-left: 2rem;
+             margin-bottom: 0.5rem;
+         }
         </style>
     </head>
     <body>
         <div class="app">
             <h3>Transcript</h3>
-            <div class="repl-transcript-holder">
+            <div id="repl-transcript-holder" class="repl-transcript-holder">
                 <div id="repl-transcript" class="repl-transcript"></div>
             </div>
-            <h3>Input<h3>
+            <h3>Input</h3>
+            <div class="subhead">Type individual chialisp forms (defun ...) (defmacro ...) etc</div>
             <div class="repl-input-holder">
                 <textarea cols="80" rows="15" id="repl-input" class="repl-input"></textarea>
             </div>

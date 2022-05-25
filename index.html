@@ -1,10 +1,11 @@
 <html>
     <head>
+        <meta charset="UTF-8">
         <title>chialisp-21 - a more modern chialisp compiler</title>
         <link rel='stylesheet' href='css/main.css'></link>
     </head>
     <body>
-        <div class='app'>
+        <div id="app" class='app'>
             <div class='heading'>
                 <div class='logo'>(🍃)</div>
                 <div class='heading-name'>chialisp 21 - a more modern chialisp compiler</div>
@@ -17,6 +18,7 @@
                     <div><a href='#quickstart'>Quickstart</a></div>
                     <div><a href='#features'>Features</a></div>
                     <div><a href='#syntax'>Syntax</a></div>
+                    <div><a href='#repl' onclick="run_repl()">Try it</a></div>
                 </div>
                 <div class='content'>
                     <h2><a id='why'></a>Why</h2>
@@ -249,5 +251,24 @@
                 </div>
             </div>
         </div>
+        <div id="repl-container" class='repl-container-back' style="display: none;" onclick="hide_repl()">
+            <div id="back" class="back">Back</div>
+            <iframe class='repl-container' src="/repl.html"></iframe>
+        </div>
     </body>
+    <script>
+     function hide_repl() {
+         var replContainer = document.getElementById('repl-container');
+         replContainer.style.display = "none";
+         var app = document.getElementById('app');
+         app.style.display = "flex";
+     }
+
+     function run_repl() {
+         var replContainer = document.getElementById('repl-container');
+         replContainer.style.display = "flex";
+         var app = document.getElementById('app');
+         app.style.display = "none";
+     }
+    </script>
 </html>
