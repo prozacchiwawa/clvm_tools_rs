@@ -42,7 +42,7 @@ function repl() {
 	});
 }
 
-axios.get('/clvm_tools_rs_bg.wasm', {responseType: 'blob'}).then((resp) => {
+axios.get('clvm_tools_rs_bg.wasm', {responseType: 'blob'}).then((resp) => {
 	if (resp.status != 200) {
 		console.error(resp);
 		return;
