@@ -2,14 +2,65 @@
     <head>
         <title>chialisp-21 - a more modern chialisp compiler</title>
         <link rel='stylesheet' href='css/main.css'></link>
+        <style>
+         body {
+             color: white;
+             background-color: #225566;
+             width: 100vw;
+             height: 100vh;
+             display: flex;
+             flex-direction: column;
+         }
+
+         .repl-transcript-holder {
+             height: 80%;
+             overflow-y: auto;
+             display: flex;
+             flex-direction: column;
+             background-color: #ddd;
+             color: black;
+         }
+
+         .repl-transcript {
+         }
+
+         .app {
+             position: relative;
+             left: 0;
+             top: 0;
+             width: 100vw;
+             height: 100vh;
+             overflow: none;
+             display: flex;
+             flex-direction: column;
+         }
+
+         .repl-input-holder {
+             display: flex;
+             flex-direction: column;
+             justify-content: center;
+         }
+
+         .repl-send-input {
+             width: 10rem;
+             height: 2rem;
+             color: green;
+         }
+
+         h3 {
+             font-size: 1rem;
+         }
+        </style>
     </head>
     <body>
         <div class="app">
+            <h3>Transcript</h3>
             <div class="repl-transcript-holder">
                 <div id="repl-transcript" class="repl-transcript"></div>
             </div>
+            <h3>Input<h3>
             <div class="repl-input-holder">
-                <textarea cols="60" rows="15" id="repl-input" class="repl-input"></textarea>
+                <textarea cols="80" rows="15" id="repl-input" class="repl-input"></textarea>
             </div>
             <button id="repl-send-input" class="repl-send-input">Run</button>
         </div>
