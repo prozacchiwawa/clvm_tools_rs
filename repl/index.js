@@ -31,28 +31,24 @@ function repl() {
 
   function addTranscript(classes, s, assign) {
 	    var replTranscript = document.getElementById('repl-transcript');
-	    var lines = s.split('\n');
-	    for (var i = 0; i < lines.length; i++) {
-	        var line = lines[i];
-	        var lineElement = document.createElement('pre');
-          lineElement.setAttribute('class', classes);
-	        lineElement.appendChild(document.createTextNode(line));
-          if (assign) {
-              var buttonElement = document.createElement('button');
-              buttonElement.setAttribute('class', 'text-copy-button');
-              buttonElement.addEventListener('click', () => {
-                  navigator.clipboard.writeText(s);
-              });
-              lineElement.appendChild(buttonElement);
-              buttonElement = document.createElement('button');
-              buttonElement.setAttribute('class', 'text-repeat-button');
-              buttonElement.addEventListener('click', () => {
-                  resetInput(s);
-              });
-              lineElement.appendChild(buttonElement);
-          }
-	        replTranscript.appendChild(lineElement);
-	    }
+	    var lineElement = document.createElement('pre');
+      lineElement.setAttribute('class', classes);
+	    lineElement.appendChild(document.createTextNode(s));
+      if (assign) {
+          var buttonElement = document.createElement('button');
+          buttonElement.setAttribute('class', 'text-copy-button');
+          buttonElement.addEventListener('click', () => {
+              navigator.clipboard.writeText(s);
+          });
+          lineElement.appendChild(buttonElement);
+          buttonElement = document.createElement('button');
+          buttonElement.setAttribute('class', 'text-repeat-button');
+          buttonElement.addEventListener('click', () => {
+              resetInput(s);
+          });
+          lineElement.appendChild(buttonElement);
+      }
+	    replTranscript.appendChild(lineElement);
 	}
 
 	replButton.addEventListener('click', () => {
