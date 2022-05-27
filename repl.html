@@ -2,6 +2,9 @@
     <head>
         <title>chialisp-21 - a more modern chialisp compiler</title>
         <link rel='stylesheet' href='css/main.css'></link>
+        <link rel="stylesheet" href="css/codemirror.css">
+        <script src="lib/codemirror.js"></script>
+        <script src="lib/mode/scheme/scheme.js"></script>
         <style>
          body {
              color: white;
@@ -46,6 +49,10 @@
              justify-content: center;
          }
 
+         .repl-input {
+             display: block;
+         }
+
          .repl-send-input {
              width: 10rem;
              height: 2rem;
@@ -60,6 +67,53 @@
              font-size: 0.75rem;
              margin-left: 2rem;
              margin-bottom: 0.5rem;
+         }
+
+         .repl-t-output {
+             color: #030;
+         }
+
+         .repl-t-input {
+             color: #009;
+             min-height: 2rem;
+         }
+
+         .repl-t-error {
+             color: #900;
+         }
+
+         .repl-t-waiting {
+             color: #330;
+         }
+
+         .text-copy-button {
+             position: relative;
+             height: 2rem;
+             width: 2rem;
+             background-color: #eee;
+             border: 1px solid black;
+             border-radius: 2px;
+             padding: 3px;
+             float: right;
+         }
+
+         .text-copy-button::after {
+             content: "\1f4cb";
+         }
+
+         .text-repeat-button {
+             position: relative;
+             height: 2rem;
+             width: 2rem;
+             background-color: #eee;
+             border: 1px solid black;
+             border-radius: 2px;
+             padding: 3px;
+             float: right;
+         }
+
+         .text-repeat-button::after {
+             content: "\21e9";
          }
         </style>
     </head>

@@ -12,31 +12,61 @@ function repl() {
 	var repl = r.create_repl();
 	console.log('repl',repl);
 
+	var replInput = document.getElementById('repl-input');
+  var cm = CodeMirror.fromTextArea(replInput, {
+        lineNumbers: false,
+        mode: 'scheme'
+  });
 	var replButton = document.getElementById('repl-send-input');
 
-	function addTranscript(s) {
+  function resetInput(s) {
+	    var replInput = document.getElementById('repl-input');
+      if (replInput) {
+          replInput.value = s;
+      }
+      if (cm) {
+          cm.setValue(s);
+      }
+  }
+
+  function addTranscript(classes, s, assign) {
 	    var replTranscript = document.getElementById('repl-transcript');
 	    var lines = s.split('\n');
 	    for (var i = 0; i < lines.length; i++) {
 	        var line = lines[i];
 	        var lineElement = document.createElement('pre');
+          lineElement.setAttribute('class', classes);
 	        lineElement.appendChild(document.createTextNode(line));
+          if (assign) {
+              var buttonElement = document.createElement('button');
+              buttonElement.setAttribute('class', 'text-copy-button');
+              buttonElement.addEventListener('click', () => {
+                  navigator.clipboard.writeText(s);
+              });
+              lineElement.appendChild(buttonElement);
+              buttonElement = document.createElement('button');
+              buttonElement.setAttribute('class', 'text-repeat-button');
+              buttonElement.addEventListener('click', () => {
+                  resetInput(s);
+              });
+              lineElement.appendChild(buttonElement);
+          }
 	        replTranscript.appendChild(lineElement);
 	    }
 	}
 
 	replButton.addEventListener('click', () => {
 	    var replInput = document.getElementById('repl-input');
-	    console.log(replInput);
-	    var input = replInput.value.trim();
-	    console.log(input);
+	    var input = cm.getValue().trim();
 	    var result = r.repl_run_string(repl, input);
-	    if (result.error !== undefined) {
-	        addTranscript('E ' + result.error);
+
+	    addTranscript('repl-t-input', input, true);
+      if (result === null || result === undefined) {
+          addTranscript('repl-t-waiting', '...');
+	    } else if (result.error !== undefined) {
+	        addTranscript('repl-t-error', 'E ' + result.error);
 	    } else if (result) {
-	        addTranscript('< ' + input + '\n> ' + r.sexp_to_string(result));
-	    } else {
-	        addTranscript('< ' + input + '\n...');
+	        addTranscript('repl-t-output', '> ' + r.sexp_to_string(result));
 	    }
       scrollToBottom('repl-transcript-holder');
 	});

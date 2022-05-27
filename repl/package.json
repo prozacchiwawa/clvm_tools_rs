@@ -5,6 +5,7 @@
     "axios": "^0.27.2",
     "binascii": "^0.0.2",
     "browserfs": "^1.4.3",
+    "codemirror": "^5.65.4",
     "path": "^0.12.7",
     "process": "^0.11.10",
     "text-encoding": "^0.7.0",
