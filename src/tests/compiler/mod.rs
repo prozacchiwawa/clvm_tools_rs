@@ -7,6 +7,7 @@ use crate::compiler::srcloc::Srcloc;
 mod clvm;
 mod compiler;
 mod evaluate;
+mod offsetwriter;
 mod repl;
 
 #[test]

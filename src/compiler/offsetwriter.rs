@@ -20,43 +20,43 @@ use std::io::Write;
 //
 
 pub trait ColumnWriter {
-    fn getColumn(&self) -> usize;
-    fn currentOffset(&self) -> usize;
-    fn pushState(&mut self, column: usize);
-    fn popState(&mut self) -> usize;
+    fn get_column(&self) -> usize;
+    fn current_offset(&self) -> usize;
+    fn push_state(&mut self, column: usize);
+    fn pop_state(&mut self) -> usize;
 }
 
 pub struct ColumnWriterPass<'a, W> where W: Write {
     w: &'a mut W,
-    offsetStack: Vec<usize>,
-    currentCol: usize
+    offset_stack: Vec<usize>,
+    current_col: usize
 }
 
 impl<'a, W> ColumnWriterPass<'a, W> where W: Write {
-    fn new(w: &'a mut W) -> Self {
+    pub fn new(w: &'a mut W) -> Self {
         ColumnWriterPass {
             w: w,
-            offsetStack: Vec::new(),
-            currentCol: 0
+            offset_stack: Vec::new(),
+            current_col: 0
         }
     }
 }
 
 impl<'a, W> ColumnWriter for ColumnWriterPass<'a, W> where W: Write {
-    fn getColumn(&self) -> usize { self.currentCol }
-    fn currentOffset(&self) -> usize {
-        if self.offsetStack.is_empty() {
+    fn get_column(&self) -> usize { self.current_col }
+    fn current_offset(&self) -> usize {
+        if self.offset_stack.is_empty() {
             0
         } else {
-            self.offsetStack[self.offsetStack.len() - 1]
+            self.offset_stack[self.offset_stack.len() - 1]
         }
     }
-    fn pushState(&mut self, column: usize) {
-        self.offsetStack.push(column);
+    fn push_state(&mut self, column: usize) {
+        self.offset_stack.push(column);
     }
-    fn popState(&mut self) -> usize {
-        self.offsetStack.pop();
-        self.currentOffset()
+    fn pop_state(&mut self) -> usize {
+        self.offset_stack.pop();
+        self.current_offset()
     }
 }
 
@@ -64,28 +64,34 @@ impl<'a, W> Write for ColumnWriterPass<'a, W> where W: Write {
     fn write(&mut self, s: &[u8]) -> Result<usize, std::io::Error> {
         let mut towrite = vec![0];
         let mut count = 0;
+        let current_offset = self.current_offset();
+
         for by in s.iter() {
             if *by == '\n' as u8 {
                 // After a newline, ensure that we're at the current offset col.
-                let currentOffset = self.currentOffset();
                 towrite[0] = *by;
-                self.currentCol = 0;
                 count += self.w.write(&towrite)?;
-                towrite[0] = ' ' as u8;
-                while self.currentCol != currentOffset {
-                    self.write(&towrite);
-                }
+                self.current_col = 0;
                 continue;
             } else if *by == '\t' as u8 {
                 towrite[0] = ' ' as u8;
-                count += self.write(&towrite)?;
-                while self.currentCol % 8 != 0 {
-                    count += self.write(&towrite)?;
+                count += self.w.write(&towrite)?;
+                self.current_col += 1;
+                while self.current_col % 8 != 0 {
+                    self.current_col += 1;
+                    count += self.w.write(&towrite)?;
                 }
                 continue;
             }
 
+            towrite[0] = ' ' as u8;
+            while self.current_col < current_offset {
+                self.current_col += 1;
+                count += self.w.write(&towrite)?;
+            }
+
             towrite[0] = *by;
+            self.current_col += 1;
             count += self.w.write(&towrite)?;
         }
 

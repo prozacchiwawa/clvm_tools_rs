@@ -8,7 +8,7 @@ pub mod evaluate;
 pub mod frontend;
 mod gensym;
 mod inline;
-mod offsetwriter;
+pub mod offsetwriter;
 mod optimize;
 pub mod preprocessor;
 pub mod prims;
