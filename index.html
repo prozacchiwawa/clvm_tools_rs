@@ -191,6 +191,20 @@
                             A function which is stored in the environment until used.
                             Can be called recursively if not inlined.
                         </p>
+                        <p class='bump'>
+                            Arguments support haskell style destructuring capture.
+
+                            <div class='box-content sidebyside'><pre>&gt; (defun leftof (@ point (x y)) (if x (list (- x 1) y) point))
+&gt; (leftof 3 5)
+&lt; (2 5)
+&gt; (leftof 0 5)
+&lt; (0 5)</pre><pre>&gt; data Pt = Pt Int Int deriving Show
+&gt; leftof p@(Pt x y) = if x /= 0 then Pt (x - 1) y else p
+&gt; leftof $ Pt 3 5
+Pt 2 5
+&gt; leftof $ Pt 0 5
+Pt 0 5</pre></div>
+                        </p>
                         <h3>Body forms</h3>
                         <p>
                             <div class='box-content'><pre>(callable [expressions...])</pre></div>

@@ -176,3 +176,13 @@ h4 {
     font-family: sans-serif;
     cursor: pointer;
 }
+
+.sidebyside {
+    display: flex;
+    flex-direction: row;
+}
+
+.sidebyside > pre {
+    border: 1px solid black;
+    margin: 0.5rem;
+}
