@@ -16,7 +16,7 @@ use crate::compiler::codegen::codegen;
 use crate::compiler::comptypes::{
     BodyForm, CompileErr, CompileForm, CompilerOpts, HelperForm, PrimaryCodegen,
 };
-use crate::compiler::evaluate::Evaluator;
+use crate::compiler::evaluate::{build_reflex_captures, Evaluator};
 use crate::compiler::frontend::frontend;
 use crate::compiler::prims;
 use crate::compiler::runtypes::RunFailure;
@@ -80,7 +80,7 @@ fn make_simple_argbindings(
                 b.clone(),
             );
         }
-        SExp::Atom(l, n) => {
+        SExp::Atom(_l, n) => {
             let borrowed_prog_args: &SExp = prog_args.borrow();
             // Alternatively, by path
             // at_path(current_path.clone() | path_mask.clone(), l.clone())
@@ -124,13 +124,10 @@ fn fe_opt(
     for h in compiler_helpers.iter() {
         match h {
             HelperForm::Defun(loc, name, inline, args, body) => {
-                let body_rc = evaluator.shrink_bodyform(
-                    allocator,
-                    Rc::new(SExp::Nil(compileform.args.loc())),
-                    &HashMap::new(),
-                    body.clone(),
-                    true,
-                )?;
+                let mut env = HashMap::new();
+                build_reflex_captures(&mut env, args.clone());
+                let body_rc =
+                    evaluator.shrink_bodyform(allocator, args.clone(), &env, body.clone(), true)?;
                 let new_helper = HelperForm::Defun(
                     loc.clone(),
                     name.clone(),
@@ -308,7 +305,7 @@ impl CompilerOpts for DefaultCompilerOpts {
             let mut p = PathBuf::from(dir);
             p.push(filename.clone());
             match fs::read_to_string(p) {
-                Err(e) => {
+                Err(_e) => {
                     continue;
                 }
                 Ok(content) => {
@@ -401,7 +398,7 @@ fn path_to_function_inner(
                     })
                 })
         }
-        any => {
+        _ => {
             let current_hash = sha256tree(program.clone());
             if &current_hash == hash {
                 Some(current_path + path_mask)
