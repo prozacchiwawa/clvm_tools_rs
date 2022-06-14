@@ -40,4 +40,5 @@ module.exports = {
 	}
     },
     devtool: 'source-map',
+    experiments: {asyncWebAssembly: true}
 };
