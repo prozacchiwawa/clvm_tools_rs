@@ -11,7 +11,7 @@ use clvm_rs::allocator::Allocator;
 use crate::classic::clvm::__type_compatibility__::bi_one;
 
 use crate::compiler::clvm::run;
-use crate::compiler::compiler::run_optimizer;
+use crate::compiler::compiler::{is_at_capture, run_optimizer};
 use crate::compiler::comptypes::{
     cons_of_string_map, foldM, join_vecs_to_string, list_to_cons, with_heading, Binding, BodyForm,
     Callable, CompileErr, CompileForm, CompiledCode, CompilerOpts, DefunCall, HelperForm,
@@ -150,11 +150,18 @@ fn create_name_lookup_(
             }
         }
         SExp::Cons(l, head, rest) => {
-            match create_name_lookup_(l.clone(), name, env.clone(), head.clone()) {
-                Err(_) => {
-                    create_name_lookup_(l.clone(), name, env, rest.clone()).map(|v| 2 * v + 1)
+            if let Some((capture, substructure)) = is_at_capture(head.clone(), rest.clone()) {
+                if *capture == *name {
+                    Ok(1_u64)
+                } else {
+                    create_name_lookup_(l.clone(), name, env.clone(), substructure.clone())
                 }
-                Ok(v) => Ok(2 * v),
+            } else {
+                create_name_lookup_(l.clone(), name, env.clone(), head.clone())
+                    .map(|v| Ok(2 * v))
+                    .unwrap_or_else(|_| {
+                        create_name_lookup_(l.clone(), name, env, rest.clone()).map(|v| 2 * v + 1)
+                    })
             }
         }
         _ => Err(CompileErr(
@@ -280,6 +287,24 @@ fn codegen_to_sexp(opts: Rc<dyn CompilerOpts>, compiler: &PrimaryCodegen) -> SEx
     )
 }
 
+fn get_prim(
+    loc: Srcloc,
+    prims: Rc<HashMap<Vec<u8>, Rc<SExp>>>,
+    name: &Vec<u8>,
+) -> Option<Rc<SExp>> {
+    if let Some(p) = prims.get(name) {
+        return Some(p.clone());
+    }
+    let myatom = SExp::Atom(loc, name.clone());
+    for kv in prims.iter() {
+        let val_borrowed: &SExp = kv.1.borrow();
+        if val_borrowed == &myatom {
+            return Some(Rc::new(myatom));
+        }
+    }
+    return None;
+}
+
 pub fn get_callable(
     _opts: Rc<dyn CompilerOpts>,
     compiler: &PrimaryCodegen,
@@ -291,7 +316,7 @@ pub fn get_callable(
             let macro_def = compiler.macros.get(name);
             let inline = compiler.inlines.get(name);
             let defun = create_name_lookup(compiler, l.clone(), name);
-            let prim = compiler.prims.get(name);
+            let prim = get_prim(l.clone(), compiler.prims.clone(), name);
             let atom_is_com = *name == "com".as_bytes().to_vec();
             let atom_is_at = *name == "@".as_bytes().to_vec();
             match (macro_def, inline, defun, prim, atom_is_com, atom_is_at) {

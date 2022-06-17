@@ -6,7 +6,7 @@ pub mod comptypes;
 pub mod debug;
 pub mod evaluate;
 pub mod frontend;
-mod gensym;
+pub mod gensym;
 mod inline;
 pub mod offsetwriter;
 mod optimize;
@@ -17,4 +17,8 @@ pub mod repl;
 pub mod runtypes;
 pub mod sexp;
 pub mod srcloc;
+<<<<<<< HEAD
 pub mod tlaplus;
+=======
+pub mod usecheck;
+>>>>>>> base

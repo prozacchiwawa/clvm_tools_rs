@@ -9,6 +9,7 @@ mod compiler;
 mod evaluate;
 mod offsetwriter;
 mod repl;
+mod usecheck;
 
 #[test]
 fn test_sexp_parse_print() {
