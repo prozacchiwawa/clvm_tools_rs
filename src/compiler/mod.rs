@@ -17,8 +17,5 @@ pub mod repl;
 pub mod runtypes;
 pub mod sexp;
 pub mod srcloc;
-<<<<<<< HEAD
 pub mod tlaplus;
-=======
 pub mod usecheck;
->>>>>>> base
