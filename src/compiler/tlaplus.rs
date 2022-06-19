@@ -1,18 +1,14 @@
-use std::collections::{HashMap, HashSet};
+use std::collections::{HashMap, HashSet, BTreeMap};
+use std::fs;
 use std::rc::Rc;
+
+use handlebars::Handlebars;
 
 use crate::classic::clvm_tools::stages::stage_0::TRunProgram;
 
-use crate::compiler::comptypes::{CompilerOpts, HelperForm};
+use crate::compiler::comptypes::{CompilerOpts, HelperForm, BodyForm};
 use crate::compiler::sexp::SExp;
 use crate::util::Number;
-
-pub struct TlaPlusGenerator {
-    opts: Rc<dyn CompilerOpts>,
-    runner: Rc<dyn TRunProgram>,
-    prims: Rc<HashMap<Vec<u8>, Rc<SExp>>>,
-    helpers: Vec<HelperForm>
-}
 
 pub struct TlaPlusCase {
     name: String,
@@ -72,37 +68,28 @@ pub struct TlaPlusFunction {
     body: TlaPlusExpression
 }
 
-pub struct TlaPlusModule {
-    extends: HashSet<String>,
-    variables: HashSet<String>,
-    functions: Vec<TlaPlusFunction>,
-    toprules: HashMap<String, TlaPlusExpression>
-}
+pub fn generate(
+    opts: Rc<dyn CompilerOpts>,
+    runner: Rc<dyn TRunProgram>,
+    name: String,
+    programs: &HashMap<String, Rc<BodyForm>>
+) -> String {
+    // create the handlebars registry
+    let mut handlebars = Handlebars::new();
 
-impl TlaPlusGenerator {
-    pub fn new(
-        opts: Rc<dyn CompilerOpts>,
-        runner: Rc<dyn TRunProgram>,
-        prims: Rc<HashMap<Vec<u8>, Rc<SExp>>>,
-        helpers: Vec<HelperForm>
-    ) -> TlaPlusGenerator {
-        TlaPlusGenerator {
-            opts,
-            runner,
-            prims,
-            helpers
-        }
-    }
+    let primary_module = fs::read_to_string("support/ChiaModel.tla")
+        .expect("Something went wrong reading the file");
 
-    pub fn generate(&self) -> TlaPlusModule {
-        panic!("TODO");
-        /*
-        TlaPlusModule {
-            extends: HashSet::new(),
-            variables: HashSet::new(),
-            functions: Vec::new(),
-            toprules: HashMap::new()
-        }
-        */
-    }
+    handlebars.register_template_string("chiamodel", primary_module)
+        .expect("chiamodel should be valid handlebars");
+
+    let mut data = BTreeMap::new();
+
+    // Insert replacements
+    data.insert("name".to_string(), name.clone());
+
+    let model = handlebars.render("chiamodel", &data)
+        .expect("should be able to render model");
+
+    model
 }
