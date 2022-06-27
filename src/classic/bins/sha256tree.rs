@@ -1,4 +1,5 @@
 use std::borrow::Borrow;
+use std::collections::{HashMap, HashSet};
 use std::env;
 use std::rc::Rc;
 
@@ -7,7 +8,7 @@ use clvm_tools_rs::classic::clvm::__type_compatibility__::{
     BytesFromType,
     sha256
 };
-use clvm_tools_rs::compiler::clvm::sha256tree;
+use clvm_tools_rs::compiler::clvm::{sha256tree, truthy};
 use clvm_tools_rs::compiler::sexp::{SExp, parse_sexp};
 use clvm_tools_rs::compiler::srcloc::Srcloc;
 use clvm_tools_rs::util::u8_from_number;
@@ -27,6 +28,7 @@ fn is_finished(x: &HashState) -> bool {
     }
 }
 
+#[derive(Debug, Clone, Eq, PartialEq, Hash)]
 enum ClvmExecutionStep {
     Untreated(Rc<SExp>),
     Exception(Rc<SExp>),
@@ -36,27 +38,47 @@ enum ClvmExecutionStep {
     CallProgram(Vec<u8>, Rc<SExp>, Path), // clvm-code, env-path
 }
 
+#[derive(Debug, Clone, Eq, PartialEq, Hash)]
 enum Hash {
     Sha256Hash(Vec<u8>)
 }
 
+impl Hash {
+    pub fn is_empty(&self) -> bool {
+        match self {
+            Hash::Sha256Hash(v) => v.is_empty()
+        }
+    }
+}
+
+#[derive(Debug, Clone, Eq, PartialEq, Hash)]
 enum Path {
-    PathInProgram(Vec<u8>)
+    Value(Vec<u8>)
 }
 
+impl Path {
+    fn len(&self) -> usize {
+        match self {
+            Path::Value(v) => v.len()
+        }
+    }
+}
+
+#[derive(Debug, Clone, Eq, PartialEq, Hash)]
 enum MessageType<T,R> {
-    Request<T>,
-    Reply<R>
+    Request(T),
+    Reply(R)
 }
 
-trait<T,R> ProcessQueue<T,R> {
-    fn get_self() -> u32;
+trait ProcessQueue<T,R> {
+    fn get_self(&self) -> u32;
     fn read(&mut self) -> Option<MessageType<T,R>>;
-    fn reply(&mut self, u32 target, value: R);
-    fn forward(&mut self, u32 target, r: T);
+    fn reply(&mut self, target: u32, value: R);
+    fn forward(&mut self, target: u32, r: T);
 }
 
-enum RunRequest {
+#[derive(Debug, Clone, Eq, PartialEq, Hash)]
+struct RunRequest {
     code: Rc<SExp>,
     env: Rc<SExp>,
     replyto: u32,
@@ -64,18 +86,21 @@ enum RunRequest {
     envhash: Hash
 }
 
-enum RunReply {
+#[derive(Debug, Clone, Eq, PartialEq, Hash)]
+struct RunReply {
     treehash: Hash,
     envhash: Hash,
-    result: Error<Rc<SExp>, Rc<SExp>>
+    result: Result<Rc<SExp>, Rc<SExp>>
 }
 
+#[derive(Debug, Clone, Eq, PartialEq, Hash)]
 enum ProgramAndEnvHash {
-    ProgramAndEnvHash(Hash, Hash)
+    Value(Hash, Hash)
 }
 
+#[derive(Debug, Clone, Eq, PartialEq, Hash)]
 enum HashesAndPath {
-    HashesAndPath(Hash, Hash, Path)
+    Value(Hash, Hash, Path)
 }
 
 fn insert_primop(
@@ -90,6 +115,25 @@ fn insert_primop(
     // First iterate and insert argument computations
 
     // Next insert the operation itself.
+}
+
+fn choose_env(path: Path, sexp: Rc<SExp>) -> ClvmExecutionStep {
+    todo!("not today");
+}
+
+fn copy_to_runmap(target: &mut HashMap<HashesAndPath, ClvmExecutionStep>, src: &HashMap<HashesAndPath, ClvmExecutionStep>) {
+    for kv in src.iter() {
+        target.insert(kv.0.clone(), kv.1.clone());
+    }
+}
+
+fn make_exn_tail_list(loc: &Srcloc, l: Vec<Rc<SExp>>) -> Rc<SExp> {
+    let mut res = Rc::new(SExp::Nil(loc.clone()));
+    for i_reverse in 0..l.len() {
+        let i = l.len() - i_reverse - 1;
+        res = Rc::new(SExp::Cons(loc.clone(), l[i].clone(), res));
+    }
+    res
 }
 
 // How to execute CLVM in temporal logic
@@ -108,109 +152,123 @@ fn insert_primop(
 // CallProgram ->
 //   enqueue clvm call with path as key
 fn executeclvm(runners: HashMap<Hash, u32>, readable: &mut dyn ProcessQueue<RunRequest, RunReply>) {
-    let mut computed: HashMap<ProgramAndEnvHash, Rc<SExp>> = HashMap::new();
+    let mut computed: HashMap<ProgramAndEnvHash, ClvmExecutionStep> = HashMap::new();
     let mut runmap: HashMap<HashesAndPath, ClvmExecutionStep> = HashMap::new();
     let mut requested: HashSet<ProgramAndEnvHash> = HashSet::new();
     let mut requests: HashMap<ProgramAndEnvHash, RunRequest> = HashMap::new();
+    let /*mut*/ runners: HashMap<Hash, u32> = HashMap::new();
 
     loop {
         // Dequeue a request
-        let mut msg = readable.read();
+        let msg = readable.read();
+        let mut new_runmap = HashMap::new();
 
         // Bring in new request if received
-        if let Some(MessageType::Request(req)) = msg {
+        if let Some(MessageType::Request(req_)) = msg {
             // Compute hashes if needed
-            if is_empty(req.treehash) {
-                req.treehash = sha256tree(req.code.clone());
+            let mut req = req_.clone();
+            if req.treehash.is_empty() {
+                req.treehash = Hash::Sha256Hash(sha256tree(req.code.clone()));
             }
-            if is_empty(req.envhash) {
-                req.envhash = sha256tree(req.env.clone());
+            if req.envhash.is_empty() {
+                req.envhash = Hash::Sha256Hash(sha256tree(req.env.clone()));
             }
 
             // Check for already run
-            if let Some(precomputed) = computed.get(ProgramAndEnvHash(req.treehash, req.envhash)) {
+            if let Some(precomputed) = computed.get(&ProgramAndEnvHash::Value(req.treehash.clone(), req.envhash.clone())) {
+                let rval =
+                    match precomputed {
+                        ClvmExecutionStep::Constant(pc) => Ok(pc.clone()),
+                        ClvmExecutionStep::Exception(e) => Err(e.clone()),
+                        _ => panic!("can't handle it")
+                    };
+
                 readable.reply(req.replyto, RunReply {
                     treehash: req.treehash.clone(),
                     envhash: req.envhash.clone(),
-                    result: Ok(precomputed.clone())
+                    result: rval
                 });
+
                 continue;
             }
 
-            if let Some(target_runner) = runners.get(req.treehash.clone()) {
-                readable.forward(target_runner, req);
+            if let Some(target_runner) = runners.get(&req.treehash) {
+                readable.forward(*target_runner, req.clone());
                 continue;
             }
 
             // Turn into paths and evaluations
-            requests.insert(ProgramAndEnvHash(req.treehash, req.envhash), req);
-            runmap.insert(HashesAndPath(req.treehash, req.envhash, vec![1]), ClvmExecutionStep::Untreated(req.code));
-        }
-
-        let mut new_runmap = HashMap::new();
-
-        // Bring in new reply if received
-        if let Some(MessageType::Reply(rep)) = msg {
+            requests.insert(ProgramAndEnvHash::Value(req.treehash.clone(), req.envhash.clone()), req.clone());
+            runmap.insert(HashesAndPath::Value(req.treehash.clone(), req.envhash.clone(), Path::Value(vec![1])), ClvmExecutionStep::Untreated(req.code.clone()));
+        } else if let Some(MessageType::Reply(rep)) = msg {
+            // Bring in new reply if received
             let res =
                 rep.result.
-                map(|v| Constant(v.clone())).
-                map_err(|e| Exception(e.clone()));
-            computed.insert(ProgramAndEnvHash(rep.treehash, rep.envhash), rep.result);
+                map(|v| ClvmExecutionStep::Constant(v.clone())).
+                unwrap_or_else(|e| ClvmExecutionStep::Exception(e.clone()));
+            computed.insert(ProgramAndEnvHash::Value(rep.treehash, rep.envhash), res);
         }
 
         for kv in runmap.iter() {
             match (kv.0, kv.1) {
-                (HashesAndPath(codehash, envhash, path), Untreated(code)) => {
+                (HashesAndPath::Value(codehash, envhash, path), ClvmExecutionStep::Untreated(code)) => {
                     match code.borrow() {
-                        SExp::Atom(_,v) => runmap.insert(HashesAndPath(codehash, envhash, vec![1]), EnvRef(v.clone())),
-                        SExp::Nil(_) => runmap.insert(HashesAndPath(codehash, envhash, vec![1]), Constant(code.clone())),
+                        SExp::Atom(_,v) => {
+                            new_runmap.insert(HashesAndPath::Value(codehash.clone(), envhash.clone(), Path::Value(vec![1])), ClvmExecutionStep::EnvRef(Path::Value(v.clone())));
+                        },
+                        SExp::Nil(_) => {
+                            new_runmap.insert(HashesAndPath::Value(codehash.clone(), envhash.clone(), Path::Value(vec![1])), ClvmExecutionStep::Constant(code.clone()));
+                        },
                         SExp::Cons(_,a,b) => {
-                            if let Some(lst) = proper_list(code, true) {
-                                if let SExp::Atom(_,pname) = lst[0] {
+                            if let Some(lst) = code.proper_list() {
+                                if let SExp::Atom(_,pname) = lst[0].borrow() {
                                     if pname.len() == 1 && pname[0] == 1 {
                                         // Quoted
-                                        new_runmap.insert(HashesAndPath(codehash, envhash, path), Constant(b.clone()));
+                                        new_runmap.insert(HashesAndPath::Value(codehash.clone(), envhash.clone(), path.clone()), ClvmExecutionStep::Constant(b.clone()));
                                     } else {
-                                        insert_primop(&mut new_runmap, path, pname, lst);
+                                        insert_primop(&mut new_runmap, path.clone(), pname.clone(), lst);
                                     }
                                 } else {
                                     // Error: head should be an atom
-                                    new_runmap.insert(HashesAndPath(codehash, envhash, vec![1]), Exception(code.clone()));
+                                    new_runmap.insert(HashesAndPath::Value(codehash.clone(), envhash.clone(), Path::Value(vec![1])), ClvmExecutionStep::Exception(code.clone()));
                                 }
                             } else {
                                 // Error: all prims use a proper list
-                                new_runmap.insert(HashesAndPath(codehash, envhash, vec![1]), Exception(code.clone()));
+                                new_runmap.insert(HashesAndPath::Value(codehash.clone(), envhash.clone(), Path::Value(vec![1])), ClvmExecutionStep::Exception(code.clone()));
                             }
+                        },
+                        _ => todo!("implement other cases")
+                    }
+                },
+                (HashesAndPath::Value(codehash, envhash, path), ClvmExecutionStep::Constant(c)) => {
+                    if path == &Path::Value(vec![1]) {
+                        let identifier = ProgramAndEnvHash::Value(codehash.clone(), envhash.clone());
+                        // Cache
+                        computed.insert(identifier.clone(), ClvmExecutionStep::Constant(c.clone()));
+                        if let Some(req) = requests.get(&identifier) {
+                            // Reply that the run completed.
+                            readable.reply(req.replyto, RunReply {
+                                treehash: codehash.clone(),
+                                envhash: envhash.clone(),
+                                result: Ok(c.clone())
+                            });
                         }
                     }
                 },
-                (HashesAndPath(codehash, envhash, path), Constant(c)) => {
-                    if path == 1 {
-                        let identifier = ProgramAndEnvHash(codehash, envhash);
-                        // Cache
-                        computed.insert(identifier, c);
-                        // Reply that the run completed.
-                        readable.reply(RunReply {
-                            treehash.clone(),
-                            envhash.clone(),
-                            Ok(c.clone())
-                        });
-                    }
-                },
-                (HashesAndPath(codehash, envhash, path), Exception(x)) => {
+                (HashesAndPath::Value(codehash, envhash, path), ClvmExecutionStep::Exception(x)) => {
                     // Propogate an exception
-                    new_runmap.insert(HashesAndPath(codehash, envhash, vec![1]), Exception(x.clone()));
+                    new_runmap.insert(HashesAndPath::Value(codehash.clone(), envhash.clone(), Path::Value(vec![1])), ClvmExecutionStep::Exception(x.clone()));
                 },
-                (HashesAndPath(codehash, envhash, path), EnvRef(epath)) => {
+                (HashesAndPath::Value(codehash, envhash, path), ClvmExecutionStep::EnvRef(epath)) => {
                     // Make a path choice
-                    if let Some(req) = requests.get(ProgramAndEnvHash(codehash, envhash)) {
-                        new_runmap.insert(HashesAndPath(codehash, envhash, path), choose_env(epath, req.env));
+                    if let Some(req) = requests.get(&ProgramAndEnvHash::Value(codehash.clone(), envhash.clone())) {
+                        new_runmap.insert(HashesAndPath::Value(codehash.clone(), envhash.clone(), path.clone()), choose_env(epath.clone(), req.env.clone()));
                     }
                 },
-                (HashesAndPath(codehash, envhash, path), PrimitveOp(op, paths)) => {
+                (HashesAndPath::Value(codehash, envhash, path), ClvmExecutionStep::PrimitiveOp(op, paths)) => {
                     let mut constant_inputs = Vec::new();
                     for p in paths.iter() {
-                        if let Some(Constant(c)) = runmap.get(p) {
+                        if let Some(ClvmExecutionStep::Constant(c)) = runmap.get(&HashesAndPath::Value(codehash.clone(), envhash.clone(), p.clone())) {
                             constant_inputs.push(c.clone());
                         }
                     }
@@ -221,71 +279,71 @@ fn executeclvm(runners: HashMap<Hash, u32>, readable: &mut dyn ProcessQueue<RunR
                             2 => {
                                 // Apply
                                 // Enqueue a new request to ourselves.
-                                let reqid = ProgramAndEnvHash(codehash, envhash);
+                                let reqid = ProgramAndEnvHash::Value(codehash.clone(), envhash.clone());
 
-                                if let Some(result) = computed.get(reqid) {
-                                    new_runmap.insert(HashesAndPath(codehash, envhash, path), result);
-                                    copy_to_runmap(&mut runmap, &new_runmap);
-                                    continue;
+                                if let Some(result) = computed.get(&reqid) {
+                                    new_runmap.insert(HashesAndPath::Value(codehash.clone(), envhash.clone(), path.clone()), result.clone());
+                                } else if !requested.contains(&reqid) {
+                                    requested.insert(reqid);
+                                    readable.forward(readable.get_self(), RunRequest {
+                                        code: constant_inputs[1].clone(),
+                                        env: constant_inputs[2].clone(),
+                                        replyto: readable.get_self(),
+                                        treehash: Hash::Sha256Hash(sha256tree(constant_inputs[1].clone())),
+                                        envhash: Hash::Sha256Hash(sha256tree(constant_inputs[2].clone()))
+                                    });
                                 }
-
-                                if requested.contains(reqid) {
-                                    copy_to_runmap(&mut runmap, &new_runmap);
-                                    continue;
-                                }
-
-                                requested.insert(reqid);
-                                readable.forward(readable.get_self(), RunRequest {
-                                    code: constant_inputs[1],
-                                    env: constant_inputs[2],
-                                    replyto: readable.get_self(),
-                                    treehash: sha256tree(constant_inputs[1]),
-                                    envhash: sha256tree(constant_inputs[2])
-                                });
                             },
-                            3 =>.{
+                            3 => {
                                 // Condition
                                 let new_value =
-                                    if truthy(constant_inputs[1]) {
-                                        constant_inputs[2]
+                                    if truthy(constant_inputs[1].clone()) {
+                                        constant_inputs[2].clone()
                                     } else {
-                                        constant_inputs[3]
+                                        constant_inputs[3].clone()
                                     };
-                                new_runmap.insert(HashesAndPath(codehash, envhash, path), new_value);
+                                new_runmap.insert(HashesAndPath::Value(codehash.clone(), envhash.clone(), path.clone()), ClvmExecutionStep::Constant(new_value));
                             },
                             4 => {
                                 // Cons
-                                new_runmap.insert(HashesAndPath(codehash, envhash, path), Constant(Rc::new(SExp::Cons(constant_inputs[1].loc(), constant_inputs[2], constant_inputs[3]))));
+                                new_runmap.insert(HashesAndPath::Value(codehash.clone(), envhash.clone(), path.clone()), ClvmExecutionStep::Constant(Rc::new(SExp::Cons(constant_inputs[1].loc(), constant_inputs[2].clone(), constant_inputs[3].clone()))));
                             },
                             5 => {
                                 // First
-                                if let SExp::Cons(_,a,_) = constant_inputs[1] {
-                                    new_runmap.insert(HashesAndPath(codehash, envhash, path), Constant(a.clone()));
-                                } else {
-                                    new_runmap.insert(HashesAndPath(codehash, envhash, path), Exception(constant_inputs[1]));
-                                }
+                                let id = HashesAndPath::Value(codehash.clone(), envhash.clone(), path.clone());
+                                let value =
+                                    if let SExp::Cons(_,a,_) = constant_inputs[1].borrow() {
+                                        ClvmExecutionStep::Constant(a.clone())
+                                    } else {
+                                        ClvmExecutionStep::Exception(constant_inputs[1].clone())
+                                    };
+                                new_runmap.insert(id, value);
                             },
                             6 => {
                                 // Rest
-                                if let SExp::Cons(_,_,b) = constant_inputs[1] {
-                                    new_runmap.insert(HashesAndPath(codehash, envhash, path), Constant(b.clone()));
-                                } else {
-                                    new_runmap.insert(HashesAndPath(codehash, envhash, path), Exception(constant_inputs[1]));
-                                }
+                                let id = HashesAndPath::Value(codehash.clone(), envhash.clone(), path.clone());
+                                let value =
+                                    if let SExp::Cons(_,_,b) = constant_inputs[1].borrow() {
+                                        ClvmExecutionStep::Constant(b.clone())
+                                    } else {
+                                        ClvmExecutionStep::Exception(constant_inputs[1].clone())
+                                    };
+                                new_runmap.insert(id, value);
                             },
                             7 => {
                                 // isList
                                 let result =
-                                    if let SExp::Cons(l,_,_) = constant_inputs[1] {
+                                    if let SExp::Cons(l,_,_) = constant_inputs[1].borrow() {
                                         Rc::new(SExp::Atom(l.clone(), vec![1]))
                                     } else {
-                                        Rc::new(SExp::Nil(l.clone()))
+                                        Rc::new(SExp::Nil(constant_inputs[1].loc()))
                                     };
-                                new_runmap.insert(HashesAndPath(codehash, envhash, path), Constant(result));
+                                new_runmap.insert(HashesAndPath::Value(codehash.clone(), envhash.clone(), path.clone()), ClvmExecutionStep::Constant(result));
                             },
                             8 => {
                                 // Exn
-                                new_runmap.insert(HashesAndPath(codehash, envhash, vec![1]), Exception(make_exn_tail_list(constant_inputs)));
+                                let loc = Srcloc::start(&"*exn*".to_string());
+                                new_runmap.insert(HashesAndPath::Value(codehash.clone(), envhash.clone(), Path::Value(vec![1])), ClvmExecutionStep::Exception(make_exn_tail_list(&loc, constant_inputs)));
                             },
                             _ => {
                                 // Unknown
@@ -293,7 +351,8 @@ fn executeclvm(runners: HashMap<Hash, u32>, readable: &mut dyn ProcessQueue<RunR
                             },
                         }
                     }
-                }
+                },
+                _ => todo!("handle other cases (probably empty)")
             }
         }
 
