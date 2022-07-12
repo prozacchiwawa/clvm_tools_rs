@@ -156,7 +156,22 @@
                                 </div>
                                 <h4>test.cl with wrong password: the site raising the exception is shown</h4>
                             </div>
-                        </p>
+			    <h3>Use checking</h3>
+			    <div class='box'>
+				<div class='box-content'>
+				    <pre>$ ./target/debug/run --check-unused-args \</pre>
+				    <pre>  '(mod (arg) (include *standard-cl-21*) (defun f (a b) (+ (* a a) a)) (f 3 arg))'</pre>
+				    <pre> - arg</pre>
+				    <pre>$ ./target/debug/run --check-unused-args \</pre>
+				    <pre>  '(mod (arg) (include *standard-cl-21*) (defun f (a b) (+ (* b b) a)) (f 3 arg))'</pre>
+				    <pre>(2 (1 2 2 (4 2 (4 (1 . 3) (4 5 ())))) (4 (1 2 (1 16 (18 11 11) 5) 1) 1))</pre>
+				</div>
+				<h4>Unused live argument was caught by use checker</h4>
+			    </div>
+			</p>
+			<p class='bump'>
+			    Since upper case arguments have been used to indicate arguments that are present when the puzzle hash is computed, chialisp can check whether lower case arguments to the program play a role in the output.  An argument that doesn't affect the output can signal a likely error.  You can mark arguments intentionally unused by starting with underscore.
+			</p>
                         <h2><a id='syntax'></a>Syntax</h2>
                         <h3>Module</h3>
                         <p>
