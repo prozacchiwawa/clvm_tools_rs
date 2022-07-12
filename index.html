@@ -161,6 +161,7 @@
 				<div class='box-content'>
 				    <pre>$ ./target/debug/run --check-unused-args \</pre>
 				    <pre>  '(mod (arg) (include *standard-cl-21*) (defun f (a b) (+ (* a a) a)) (f 3 arg))'</pre>
+				    <pre>unused arguments detected at the mod level (lower case arguments are considered uncurried by convention)</pre>
 				    <pre> - arg</pre>
 				    <pre>$ ./target/debug/run --check-unused-args \</pre>
 				    <pre>  '(mod (arg) (include *standard-cl-21*) (defun f (a b) (+ (* b b) a)) (f 3 arg))'</pre>
